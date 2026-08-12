@@ -155,7 +155,15 @@ resource "aws_iam_role" "ci" {
           # repozitáře i větve, takže tuhle roli nepřevezme fork ani pull request
           # z cizího repozitáře -- a to je jediné, co brání komukoli na GitHubu
           # pushnout si sem vlastní image.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:${var.github_ref}"
+          #
+          # Dvě podoby, protože GitHub přechází na immutable subject claim: vedle
+          # jména repozitáře posílá i jeho číselné id (`gh api /repos/<r>/actions/
+          # oidc/customization/sub`). Obě jsou přesné a obě váží na jednu větev;
+          # ta s idčky je navíc odolná proti přejmenování a znovuzaložení repa.
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repo}:ref:${var.github_ref}",
+            "repo:${var.github_repo_id}:ref:${var.github_ref}",
+          ]
         }
       }
     }]

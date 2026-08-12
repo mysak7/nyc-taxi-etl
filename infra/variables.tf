@@ -27,6 +27,13 @@ variable "github_ref" {
   default = "refs/heads/master"
 }
 
+# Immutable podoba téhož: `gh api /repos/<repo>/actions/oidc/customization/sub`
+# vrátí ji v `sub_claim_prefix`.
+variable "github_repo_id" {
+  type    = string
+  default = "mysak7@205718209/nyc-taxi-etl@1331874799"
+}
+
 # Kdo smí pipeline spouštět. Prázdné = kdokoli z tohohle účtu, koho na roli pustí jeho
 # vlastní IAM policy (a MFA). Produkčně sem patří konkrétní ARN.
 variable "operator_principals" {
