@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# Data se nekomitují; vzorky v tests/data/ ano (vyrobí je tests/data/make_sample.py).
+data/

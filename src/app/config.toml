@@ -1,0 +1,29 @@
+# Defaulty. Přebíjí se env proměnnými (APP_<KLIC>) a pak CLI flagy.
+# Prahy jsou odvozené z naměřeného baselínu na 2025-01, ne odhadnuté -- viz README.
+
+url_template = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_{year:04d}-{month:02d}.parquet"
+zones_url = "https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv"
+
+raw_uri = "./data/raw"
+curated_uri = "./data/curated"
+rejects_uri = "./data/rejects"
+
+# Zdroj publikuje s lagem 26-85 dní a přepisuje zpětně (2026-03-25 přepsal tři měsíce
+# naráz). Okno musí pokrýt obojí, jinak se restatement nikdy nezpracuje.
+lookback_months = 6
+
+# Nejnovější publikovaný měsíc starší než tohle = zdroj přestal publikovat.
+# Naměřené maximum lagu je 85 dní.
+source_stale_days = 120
+
+# Hranice věrohodnosti měření. Obvod Země je 24 901 mil; nejdelší "jízda" v 2025-01
+# má 276 423 mil. Vadná hodnota se nuluje, řádek zůstává.
+max_distance_mi = 200.0
+max_duration_min = 360.0
+
+# Tvrdé prahy běhu. Naměřeno: karanténa 1,83 %, největší skok objemu mezi měsíci
+# +21,9 % (29 měsíců), vynulovaná vzdálenost 2,53 %, doba 0,09 %.
+max_reject_ratio = 0.20
+max_volume_delta = 0.40
+max_null_ratio_distance = 0.10
+max_null_ratio_duration = 0.05

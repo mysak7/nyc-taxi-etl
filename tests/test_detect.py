@@ -1,0 +1,121 @@
+"""Detekce práce je celý provozní příběh řešení: zdroj publikuje s lagem 26-85 dní
+a soubory zpětně přepisuje. Testuje se bez sítě -- `source.head` je jediné místo s HTTP.
+"""
+
+from datetime import date
+
+import polars as pl
+import pytest
+
+from app import pipeline, source, storage
+from app.errors import DataQualityError
+
+
+@pytest.fixture
+def published(monkeypatch):
+    """Klíč je (year, month) -> ETag; co v mapě není, vrací 403 (není publikováno)."""
+    state: dict[tuple[int, int], str] = {}
+
+    def fake_head(url: str):
+        month = url.rsplit("_", 1)[-1].removesuffix(".parquet")
+        year, month = (int(part) for part in month.split("-"))
+        if (year, month) not in state:
+            return None
+        return source.SourceMeta(url=url, etag=state[(year, month)], last_modified=None, bytes=1)
+
+    monkeypatch.setattr(source, "head", fake_head)
+    return state
+
+
+def store(cfg, year, month, etag):
+    """Zapíše to, co by po sobě zanechal úspěšný běh: raw sidecar + výstupní partition."""
+    paths = pipeline.layout(cfg)
+    storage.write_json(paths.raw_meta(year, month), {"etag": etag})
+    storage.write_parquet(paths.curated_file(year, month), pl.DataFrame({"trips": [1]}))
+
+
+def test_okno_konci_u_predchoziho_mesice(cfg):
+    months = pipeline.window(cfg, today=date(2026, 8, 12))
+
+    assert months[0] == (2026, 7)  # aktuální měsíc zdroj publikovat nemůže
+    assert months[-1] == (2026, 2)  # šest měsíců pokryje lag i dávkový restatement
+    assert len(months) == cfg.lookback_months
+
+
+def test_nepublikovany_mesic_neni_prace_ani_chyba(cfg, published):
+    result = pipeline.detect(cfg, months=[(2026, 6), (2026, 7)])
+
+    assert result["months"] == []
+    assert result["source_newest"] is None
+
+
+def test_novy_mesic_je_prace(cfg, published):
+    published[(2026, 5)] = "etag-a"
+
+    assert pipeline.detect(cfg, months=[(2026, 5)])["months"] == [
+        {"year": 2026, "month": 5, "etag": "etag-a", "reason": "new"}
+    ]
+
+
+def test_beze_zmeny_etagu_se_nedela_nic(cfg, published):
+    published[(2026, 5)] = "etag-a"
+    store(cfg, 2026, 5, "etag-a")
+
+    result = pipeline.detect(cfg, months=[(2026, 5)])
+
+    assert result["months"] == []
+    assert result["ingest_gap"] == []
+
+
+def test_zpetny_restatement_se_pozna_z_etagu(cfg, published):
+    published[(2026, 5)] = "etag-b"
+    store(cfg, 2026, 5, "etag-a")
+
+    months = pipeline.detect(cfg, months=[(2026, 5)])["months"]
+
+    assert [(m["month"], m["reason"]) for m in months] == [(5, "etag_changed")]
+
+
+def test_chybejici_vystup_je_prace_i_kdyz_etag_sedi(cfg, published):
+    published[(2026, 5)] = "etag-a"
+    storage.write_json(pipeline.layout(cfg).raw_meta(2026, 5), {"etag": "etag-a"})
+
+    result = pipeline.detect(cfg, months=[(2026, 5)])
+
+    assert [m["reason"] for m in result["months"]] == ["missing_output"]
+    assert result["ingest_gap"] == ["2026-05"]
+
+
+def test_force_ignoruje_etag_kvuli_backfillu(cfg, published):
+    published[(2026, 5)] = "etag-a"
+    store(cfg, 2026, 5, "etag-a")
+
+    months = pipeline.detect(cfg, months=[(2026, 5)], force=True)["months"]
+
+    assert [m["reason"] for m in months] == ["force"]
+
+
+def test_backfill_rozsah_se_rozbali_na_mesice():
+    assert pipeline.month_range("2024-11", "2025-02") == [
+        (2024, 11),
+        (2024, 12),
+        (2025, 1),
+        (2025, 2),
+    ]
+    assert pipeline.month_range(None, None) is None
+
+
+def test_zeleny_dag_nelze_kdyz_zdroj_ma_data_ktera_nemame(cfg, published):
+    published[(2026, 5)] = "etag-a"
+
+    with pytest.raises(DataQualityError, match="bez výstupu"):
+        pipeline.check_freshness(cfg)
+
+
+def test_zastaraly_zdroj_shodi_beh(cfg, published, monkeypatch):
+    monkeypatch.setattr(pipeline, "window", lambda cfg, today=None: [(2020, 1)])
+    published[(2020, 1)] = "etag-a"
+    store(cfg, 2020, 1, "etag-a")
+
+    with pytest.raises(DataQualityError, match="práh je 120"):
+        pipeline.check_freshness(cfg)
