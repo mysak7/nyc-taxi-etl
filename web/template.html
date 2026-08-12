@@ -17,6 +17,15 @@
   --hover: rgba(11, 11, 11, 0.04);
   --good: #0ca30c;
   --shadow: 0 1px 2px rgba(11, 11, 11, 0.05);
+  /* Sekvenční rampa mapy: jeden odstín, šest kroků. Zóna bez dat je --m0, a je to
+     odstín šedé, ne nejsvětlejší modrá -- "nula jízd" a "nevíme" nesmí vypadat stejně. */
+  --m0: #e7e5dd;
+  --m1: #e4eefb;
+  --m2: #bed8f2;
+  --m3: #8fbce6;
+  --m4: #5c9ad8;
+  --m5: #2f7ac4;
+  --m6: #14528f;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -36,6 +45,13 @@
     --hover: rgba(255, 255, 255, 0.05);
     --good: #0ca30c;
     --shadow: none;
+    --m0: #2a2a27;
+    --m1: #16283d;
+    --m2: #1c3f65;
+    --m3: #23578e;
+    --m4: #2f72b8;
+    --m5: #4a92da;
+    --m6: #82b9ee;
   }
 }
 :root[data-theme="dark"] {
@@ -55,6 +71,13 @@
   --hover: rgba(255, 255, 255, 0.05);
   --good: #0ca30c;
   --shadow: none;
+  --m0: #2a2a27;
+  --m1: #16283d;
+  --m2: #1c3f65;
+  --m3: #23578e;
+  --m4: #2f72b8;
+  --m5: #4a92da;
+  --m6: #82b9ee;
 }
 
 :root {
@@ -336,6 +359,27 @@ select {
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 
+/* ---------- map ---------- */
+
+/* Mapa nedostává width/height v pixelech jako ostatní grafy: viewBox je pevný,
+   škáluje CSS. Překreslovat ji při resize tedy netřeba. */
+.map svg { display: block; width: 100%; height: auto; max-height: 68vh; overflow: visible; }
+.map path { stroke: var(--surface); stroke-width: 0.7; stroke-linejoin: round; }
+.map path.hl { fill: none; stroke: var(--ink); stroke-width: 2.6; pointer-events: none; }
+
+/* Rampa se čte zleva doprava jako jedna škála, popisky sedí na hranách mezi poli. */
+.ramp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+.ramp .steps { display: flex; }
+.ramp .steps i { width: 46px; height: 10px; }
+.ramp .steps i:first-child { border-radius: 2px 0 0 2px; }
+.ramp .steps i:last-child { border-radius: 0 2px 2px 0; }
+/* Popisek je dolní hranice svého pole, zarovnaný pod ním: "tahle barva = od tolika".
+   Čísla na hranách mezi poli by se musela posouvat o půl vzorku a na úzké obrazovce
+   by se přelezla. */
+.ramp .edges { display: flex; color: var(--ink-3); margin-top: 4px; }
+.ramp .edges span { width: 46px; text-align: left; white-space: nowrap; }
+.ramp .nodata { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); }
+
 .tip {
   position: absolute;
   pointer-events: none;
@@ -500,6 +544,34 @@ footer { border-top: 1px solid var(--rule); padding-top: 20px; display: flex; fl
 
 <section>
   <div class="sec-head">
+    <h2>The map</h2>
+    <div class="picker">
+      <label class="hint" for="metric-select">colour by</label>
+      <select id="metric-select" aria-label="Colour the map by"></select>
+    </div>
+  </div>
+  <p class="note">
+    Every trip carries the pickup zone it started in, so the curated layer is already a map —
+    it just needs the outlines. These come from the TLC zone shapefile, simplified once into
+    <code>web/zones.json</code>; the build bakes them in like everything else. Hover a zone
+    to read its numbers.
+  </p>
+
+  <div class="card">
+    <h3 id="map-title"></h3>
+    <p class="cap">
+      Six buckets holding the same number of zones each, so the colour is a ranking, not a ratio —
+      equal-width bands would paint everything except Midtown the same shade. Means built on a
+      handful of trips are noisy, so the tooltip always shows the trip count underneath them.
+    </p>
+    <div class="ramp" id="map-legend"></div>
+    <div class="plot map" id="zonemap"></div>
+    <p class="hint" id="map-foot"></p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
     <h2>Data</h2>
     <div class="picker">
       <button class="step-btn" type="button" id="prev" aria-label="Previous month">◀</button>
@@ -625,6 +697,9 @@ const RULE_EFFECT = {
 };
 
 const usd = (v) => "$" + nf.format(Math.round(v));
+// Průměr bez pozorování přijde z buildu jako null. Pomlčka, ne "0.00" -- to by bylo
+// tvrzení o datech, které jsme neudělali.
+const orDash = (v, fn) => (v == null ? "—" : fn(v));
 const usdM = (v) => "$" + nf1.format(v / 1e6) + "M";
 // Přes miliardu už "3214M" nikdo nepřečte.
 const usdBig = (v) => (v >= 1e9 ? "$" + nf2.format(v / 1e9) + "B" : "$" + nf.format(Math.round(v / 1e6)) + "M");
@@ -884,6 +959,129 @@ function drawBars(host, items, opts) {
   host.appendChild(svg);
 }
 
+/* ---------- map: pickup zones ---------- */
+
+// Součty jdou sečíst, průměry ne -- vážený průměr přes zóny je v payloadu už spočítaný,
+// tady se jen vybírá sloupec a formátuje.
+const METRICS = {
+  trips: {
+    label: "Published trips",
+    of: (z) => z.trips,
+    full: (v) => nf.format(v) + " trips",
+    short: (v) => (v >= 1e6 ? nf1.format(v / 1e6) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : nf.format(v)),
+  },
+  revenue: {
+    label: "Revenue",
+    of: (z) => z.revenue,
+    full: (v) => usd(v),
+    short: (v) => (v >= 1e6 ? "$" + nf1.format(v / 1e6) + "M" : "$" + Math.round(v / 1e3) + "k"),
+  },
+  avg_fare_usd: {
+    label: "Mean fare",
+    of: (z) => z.avg_fare_usd,
+    full: (v) => "$" + nf2.format(v),
+    short: (v) => "$" + Math.round(v),
+  },
+  avg_distance_mi: {
+    label: "Mean distance",
+    of: (z) => z.avg_distance_mi,
+    full: (v) => nf2.format(v) + " mi",
+    short: (v) => nf1.format(v),
+  },
+};
+
+const BUCKETS = 6;
+let metric = "trips";
+
+// Kvantily, ne stejně široká pásma. Jízdy jsou rozdělené tak, že Midtown je řádově nad
+// zbytkem -- lineární pásma by obarvila celé město nejsvětlejším odstínem a mapa by
+// tvrdila, že se nikde nic neděje.
+function quantileEdges(values, n) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const edges = [];
+  for (let i = 1; i < n; i++) edges.push(sorted[Math.floor((i * sorted.length) / n)]);
+  return edges;
+}
+
+const bucketOf = (v, edges) => edges.reduce((acc, e) => acc + (v >= e ? 1 : 0), 0);
+
+function drawMap(host) {
+  const M = DATA.map;
+  const spec = METRICS[metric];
+  host.querySelectorAll("svg").forEach((n) => n.remove());
+
+  const stats = new Map(M.zones.map((z) => [String(z.location_id), z]));
+  const values = Object.keys(M.paths)
+    .map((id) => stats.get(id))
+    .filter((z) => z && spec.of(z) != null && isFinite(spec.of(z)))
+    .map(spec.of);
+  const edges = quantileEdges(values, BUCKETS);
+  const lows = [Math.min(...values), ...edges];
+
+  const svg = el("svg", {
+    viewBox: `0 0 ${M.width} ${M.height}`,
+    role: "img",
+    "aria-label": spec.label + " by pickup zone across the whole curated history",
+  });
+  // Bublina přežívá překreslení (visí na hostu, ne na SVG), takže po přepnutí metriky
+  // je jinak vidět dál -- s čísly, co jsou napůl z předchozího pohledu.
+  const tip = tipFor(host);
+  tip.hidden = true;
+  // Zvýraznění je jedna cesta navrch, ne silnější obrys na místě: SVG nemá z-index,
+  // takže obrys zóny kreslené dřív by zmizel pod jejími sousedy.
+  const highlight = el("path", { class: "hl", d: "" });
+
+  for (const [id, d] of Object.entries(M.paths)) {
+    const z = stats.get(id);
+    const value = z ? spec.of(z) : null;
+    const known = value != null && isFinite(value);
+    // Jméno z curated (tam ho pipeline joinovala z lookupu), a když zóna v curated
+    // není, tak aspoň jméno ze shapefilu.
+    const named = z ? [z.zone, z.borough] : M.names[id] || ["zone " + id, ""];
+
+    // Tři různé stavy, ne dva: zóna bez řádku v curated, zóna s jízdami ale bez
+    // pozorování, ze kterého by šel průměr spočítat, a zóna s číslem.
+    const missing = z ? "no " + spec.label.toLowerCase() + " recorded" : "no trips in curated";
+    const shape = el("path", { d, fill: known ? `var(--m${bucketOf(value, edges) + 1})` : "var(--m0)" });
+    shape.appendChild(el("title", {}, named[0] + ": " + (known ? spec.full(value) : missing)));
+
+    // Bez tabindex: 263 zón by znamenalo 263 zastávek tabulátoru mezi grafy. Táž čísla
+    // jsou v tabulkách níž, mapa je jejich obrázek.
+    shape.addEventListener("mousemove", (event) => {
+      highlight.setAttribute("d", d);
+      const box = host.getBoundingClientRect();
+      tip.innerHTML = z
+        ? `<b>${named[0]}</b> · ${named[1]}<br>${nf.format(z.trips)} trips · ${usdM(z.revenue)}`
+          + `<br><span class="r">mean ${orDash(z.avg_fare_usd, (v) => "$" + nf2.format(v))}`
+          + ` · ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}`
+          + ` · coverage ${orDash(z.coverage, (v) => nf1.format(v * 100) + " %")}</span>`
+        : `<b>${named[0]}</b> · ${named[1]}<br><span class="r">${missing}</span>`;
+      placeTip(tip, host, event.clientX - box.left, event.clientY - box.top - 84);
+    });
+    svg.appendChild(shape);
+  }
+
+  svg.appendChild(highlight);
+  svg.addEventListener("mouseleave", () => {
+    tip.hidden = true;
+    highlight.setAttribute("d", "");
+  });
+  host.appendChild(svg);
+
+  document.getElementById("map-legend").innerHTML =
+    `<div><div class="steps">${lows.map((_, i) => `<i style="background:var(--m${i + 1})"></i>`).join("")}</div>`
+    + `<div class="edges">${lows.map((v) => `<span>${spec.short(v)}</span>`).join("")}</div></div>`
+    + `<span class="nodata"><i class="swatch" style="background:var(--m0)"></i>no trips in curated</span>`;
+
+  document.getElementById("map-title").textContent = spec.label + " by pickup zone";
+
+  const off = M.off_map;
+  document.getElementById("map-foot").textContent =
+    Object.keys(M.paths).length + " zones · " + MONTHS[0].key + " → " + MONTHS[MONTHS.length - 1].key
+    + " (the whole history, not the month selected below) · " + nf.format(off.trips)
+    + " trips sit in " + off.zones + " codes that have no shape on any map (unknown, outside NYC)";
+}
+
 /* ---------- tables ---------- */
 
 function buildDailyTable(m) {
@@ -896,15 +1094,15 @@ function buildDailyTable(m) {
 
 function buildZoneTable(m) {
   document.getElementById("ztable").innerHTML = m.zones.slice(0, 12).map((z) => {
-    const low = z.coverage < 0.9;
+    const low = z.coverage != null && z.coverage < 0.9;
     return `<tr>
       <td>${z.zone}</td>
       <td class="dim">${z.borough}</td>
       <td class="num">${nf.format(z.trips)}</td>
-      <td class="num">${nf2.format(z.avg_distance_mi)}</td>
-      <td class="num">${nf2.format(z.median_distance_mi)}</td>
-      <td class="num" ${low ? 'style="color:var(--s2)"' : ""}>${nf1.format(z.coverage * 100)} %</td>
-      <td class="num">$${nf2.format(z.avg_fare_usd)}</td>
+      <td class="num">${orDash(z.avg_distance_mi, (v) => nf2.format(v))}</td>
+      <td class="num">${orDash(z.median_distance_mi, (v) => nf2.format(v))}</td>
+      <td class="num" ${low ? 'style="color:var(--s2)"' : ""}>${orDash(z.coverage, (v) => nf1.format(v * 100) + " %")}</td>
+      <td class="num">${orDash(z.avg_fare_usd, (v) => "$" + nf2.format(v))}</td>
     </tr>`;
   }).join("");
 }
@@ -1001,6 +1199,16 @@ function buildRuns() {
   });
 }
 
+function buildMetricPicker() {
+  const sel = document.getElementById("metric-select");
+  sel.innerHTML = Object.entries(METRICS)
+    .map(([key, spec]) => `<option value="${key}">${spec.label}</option>`).join("");
+  sel.addEventListener("change", (event) => {
+    metric = event.target.value;
+    drawMap(document.getElementById("zonemap"));
+  });
+}
+
 function buildPicker() {
   const sel = document.getElementById("month-select");
   sel.innerHTML = MONTHS.map((m) => `<option value="${m.key}">${label(m)}</option>`).join("");
@@ -1046,7 +1254,7 @@ function render() {
     full: z.zone,
     value: z.trips,
     display: nf.format(z.trips),
-    tip: `${nf.format(z.trips)} trips · ${z.borough}<br><span class="r">${usdM(z.revenue)} revenue · mean ${nf2.format(z.avg_distance_mi)} mi</span>`,
+    tip: `${nf.format(z.trips)} trips · ${z.borough}<br><span class="r">${usdM(z.revenue)} revenue · mean ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}</span>`,
   }));
   drawBars(document.getElementById("zones"), zones, { labelW: 170, valueW: 76, title: "Pickup zones by trip count" });
 
@@ -1061,6 +1269,10 @@ function select(key) {
 buildHeader();
 buildRuns();
 buildPicker();
+buildMetricPicker();
+// Mapa je za celou historii a škáluje ji CSS, takže se kreslí jednou -- ani měsíční
+// přepínač, ani resize s ní nehnou.
+drawMap(document.getElementById("zonemap"));
 render();
 
 let resizeTimer;
