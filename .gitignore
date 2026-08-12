@@ -5,3 +5,9 @@ __pycache__/
 .ruff_cache/
 # Data se nekomitují; vzorky v tests/data/ ano (vyrobí je tests/data/make_sample.py).
 data/
+
+# Terraform: stav obsahuje ARN i jména bucketů, .terraform je 500 MB providerů.
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars

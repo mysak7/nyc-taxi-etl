@@ -134,7 +134,7 @@ def run_month(
     meta, sha256 = _fetch(cfg, paths, year, month, expected_etag)
     zones = _zones(cfg, paths)
 
-    trips = pl.scan_parquet(paths.raw_file(year, month))
+    trips = storage.scan_parquet(paths.raw_file(year, month))
     schema = dq.check_contract(dict(trips.collect_schema()))
     log("contract_ok", **schema)
 

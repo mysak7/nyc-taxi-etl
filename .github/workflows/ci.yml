@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 jobs:
@@ -24,20 +24,57 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # OIDC token pro AWS; bez něj by tu musel být přístupový klíč
     steps:
       - uses: actions/checkout@v4
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Role je nastavená jako repository variable, ne secret: ARN není tajemství,
+      # tajemství je token, a ten žije 15 minut a vydá se jen na tuhle větev.
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: vars.AWS_CI_ROLE_ARN != ''
+        with:
+          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-central-1' }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        if: vars.AWS_CI_ROLE_ARN != ''
+        id: ecr
+
+      # Do ECR jde jen `sha-<git sha>`: repozitář je IMMUTABLE, takže tag nejde
+      # přepsat a nasazená verze se nemůže rozejít s tou, která prošla testy.
+      # Pohyblivý `latest` proto zůstává jen v GHCR.
+      - id: tags
+        run: |
+          {
+            echo 'value<<EOF'
+            echo "ghcr.io/${{ github.repository }}:sha-${{ github.sha }}"
+            echo "ghcr.io/${{ github.repository }}:latest"
+            if [ -n "${{ vars.ECR_REPOSITORY }}" ]; then
+              echo "${{ vars.ECR_REPOSITORY }}:sha-${{ github.sha }}"
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ github.event_name == 'push' }}
           build-args: GIT_SHA=${{ github.sha }}
-          tags: |
-            ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
+          tags: ${{ steps.tags.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Nasazuje se kód, ne konfigurace: role CI nemá UpdateFunctionConfiguration,
+      # takže cesty k datům ani prahy tudy změnit nejdou -- ty patří do terraformu.
+      - name: deploy
+        if: github.event_name == 'push' && vars.AWS_CI_ROLE_ARN != '' && vars.LAMBDA_FUNCTION != ''
+        run: |
+          aws lambda update-function-code \
+            --function-name "${{ vars.LAMBDA_FUNCTION }}" \
+            --image-uri "${{ vars.ECR_REPOSITORY }}:sha-${{ github.sha }}" \
+            --publish --no-cli-pager

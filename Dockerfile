@@ -7,11 +7,13 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 
 # Závislosti zvlášť od kódu: změna v src/ neinvaliduje cache instalace.
+# `--extra lambda` = boto3 + awslambdaric. Bez nich image na Lambdě nenastartuje
+# (ImageConfig spouští `python -m awslambdaric`) a `s3://` cesty by spadly na importu.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --extra lambda --no-install-project
 
 COPY src ./src
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra lambda
 
 
 FROM python:3.12-slim@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36

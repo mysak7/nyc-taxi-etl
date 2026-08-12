@@ -35,18 +35,23 @@ def _s3(uri: str):
     return boto3.client("s3"), parsed.netloc, parsed.path.lstrip("/")
 
 
+NOT_FOUND = {"404", "NoSuchKey", "NotFound"}
+
+
 def exists(uri: str) -> bool:
     target = _s3(uri)
     if target is None:
         return Path(uri).exists()
     client, bucket, key = target
-    from botocore.exceptions import ClientError
-
     try:
         client.head_object(Bucket=bucket, Key=key)
         return True
-    except ClientError:
-        return False
+    except client.exceptions.ClientError as error:
+        # Jen "není tam" znamená False. AccessDenied nebo 5xx se musí propsat ven:
+        # jinak vypadají jako chybějící soubor a pipeline mlčky stáhne a přepíše data.
+        if error.response["Error"]["Code"] in NOT_FOUND:
+            return False
+        raise
 
 
 def read_bytes(uri: str) -> bytes:
@@ -85,13 +90,31 @@ def write_parquet(uri: str, frame: pl.DataFrame) -> None:
 
 
 def list_names(uri: str) -> list[str]:
+    """Stránkuje: `_runs/` je append-only a jedna odpověď `list_objects_v2` vrací max
+    1000 klíčů. Bez paginátoru by po tisícím manifestu `names[-1]` přestal být poslední."""
     target = _s3(uri)
     if target is None:
         directory = Path(uri)
         return sorted(item.name for item in directory.iterdir()) if directory.is_dir() else []
     client, bucket, prefix = target
-    response = client.list_objects_v2(Bucket=bucket, Prefix=prefix.rstrip("/") + "/")
-    return sorted(item["Key"].rsplit("/", 1)[-1] for item in response.get("Contents", []))
+    pages = client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=prefix.rstrip("/") + "/"
+    )
+    return sorted(
+        item["Key"].rsplit("/", 1)[-1] for page in pages for item in page.get("Contents", [])
+    )
+
+
+def scan_parquet(uri: str) -> pl.LazyFrame:
+    """Lazy scan přes obě úložiště. Na S3 se soubor natáhne do paměti a scanuje se buffer:
+    projection pushdown zůstává (naměřeno 467 -> 146 MB, `PROJECT 6/20 COLUMNS`), jen se
+    přenese celý objekt. Nativní `pl.scan_parquet("s3://...")` by stáhl jen potřebné
+    sloupce, ale bere credentials vlastní cestou (object_store) mimo boto3 -- druhý
+    autentizační kanál kvůli 56 MB stojí za víc, než ušetří."""
+    target = _s3(uri)
+    if target is None:
+        return pl.scan_parquet(uri)
+    return pl.scan_parquet(io.BytesIO(read_bytes(uri)))
 
 
 @dataclass(frozen=True)
