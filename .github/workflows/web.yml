@@ -49,4 +49,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
+          # Musí sedět s `production_branch` projektu (cf-dns-mysak/nyc-taxi.tf), jinak
+          # Cloudflare nasadí preview a doména dál servíruje starou verzi.
+          command: pages deploy web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=master
