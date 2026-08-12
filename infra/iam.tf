@@ -281,3 +281,68 @@ resource "aws_iam_role_policy" "operator" {
     ]
   })
 }
+
+# ---------------------------------------------------------------------------
+# Web. Build statické stránky v CI: přečte curated a víc nic. Vlastní role, ne
+# rozšíření `-ci`: kdo staví web, nemá umět nasadit Lambdu, a naopak. Proti
+# `-operator` je rozdíl v tom, kdo ji smí převzít -- tuhle bere GitHub Actions
+# přes OIDC, ne člověk s MFA.
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_role" "web" {
+  name                 = "${local.name}-web"
+  max_session_duration = 3600
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          # Táž vazba na jednu větev jednoho repozitáře jako u `-ci`, v obou
+          # podobách subject claimu.
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:${var.github_repo}:ref:${var.github_ref}",
+            "repo:${var.github_repo_id}:ref:${var.github_ref}",
+          ]
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "web" {
+  name = "read-curated"
+  role = aws_iam_role.web.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # Jen curated. Stránka ukazuje agregát a manifesty; raw ani rejects k tomu
+        # nepotřebuje, takže je ani nevidí.
+        Sid      = "ReadCurated"
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.data.arn}/curated/*"
+      },
+      {
+        Sid       = "ListCurated"
+        Effect    = "Allow"
+        Action    = "s3:ListBucket"
+        Resource  = aws_s3_bucket.data.arn
+        Condition = { StringLike = { "s3:prefix" = "curated/*" } }
+      },
+      {
+        # Build je čtenář. Nic, co mění stav, sem nepatří ani omylem.
+        Sid    = "ReadOnly"
+        Effect = "Deny"
+        Action = [
+          "s3:PutObject", "s3:DeleteObject", "lambda:*", "states:*", "ecr:*", "iam:*",
+        ]
+        Resource = "*"
+      },
+    ]
+  })
+}

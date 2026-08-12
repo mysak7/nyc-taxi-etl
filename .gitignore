@@ -13,3 +13,6 @@ infra/*.tfstate
 infra/*.tfstate.*
 infra/*.tfvars
 infra/tfplan
+
+# Stránka je build artefakt: vyrábí ji web/build.py ze stavu curated, ne z gitu.
+web/dist/

@@ -19,3 +19,8 @@ output "operator_role_arn" {
   description = "aws sts assume-role --role-arn <tohle> --role-session-name run"
   value       = aws_iam_role.operator.arn
 }
+
+output "web_role_arn" {
+  description = "Patří do .github/workflows/web.yml jako role-to-assume."
+  value       = aws_iam_role.web.arn
+}

@@ -105,6 +105,25 @@ def list_names(uri: str) -> list[str]:
     )
 
 
+def list_prefixes(uri: str) -> list[str]:
+    """Názvy „adresářů" o úroveň níž, bez koncového lomítka. Na S3 to `list_names`
+    neumí: bez `Delimiter` je výpis rekurzivní a `rsplit("/")` z něj vrátí jména
+    souborů, ne partition. Používá se při procházení `dataset=/year=/month=`."""
+    target = _s3(uri)
+    if target is None:
+        directory = Path(uri)
+        return sorted(item.name for item in directory.iterdir() if item.is_dir())
+    client, bucket, prefix = target
+    pages = client.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket, Prefix=prefix.rstrip("/") + "/", Delimiter="/"
+    )
+    return sorted(
+        item["Prefix"].rstrip("/").rsplit("/", 1)[-1]
+        for page in pages
+        for item in page.get("CommonPrefixes", [])
+    )
+
+
 def scan_parquet(uri: str) -> pl.LazyFrame:
     """Lazy scan přes obě úložiště. Na S3 se soubor natáhne do paměti a scanuje se buffer:
     projection pushdown zůstává (naměřeno 467 -> 146 MB, `PROJECT 6/20 COLUMNS`), jen se

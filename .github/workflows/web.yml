@@ -1,0 +1,48 @@
+name: web
+
+# Stránka se staví ze stavu S3, ne z gitu, takže ji nestačí pouštět při pushi:
+# po nočním běhu pipeline je v curated nový měsíc a stránka o něm neví.
+on:
+  push:
+    branches: [master]
+    paths: [web/**, src/app/**, .github/workflows/web.yml]
+  schedule:
+    - cron: "30 4 * * *" # po denním běhu pipeline
+  workflow_dispatch:
+
+# Dva pushe za sebou nemají závodit o jedno nasazení; doběhne ten novější.
+concurrency:
+  group: web
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token pro AWS; bez něj by tu musel být přístupový klíč
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      # Vlastní role, ne ta od CI: build stránky umí přečíst curated a nic víc.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_WEB_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-central-1' }}
+
+      - name: build
+        env:
+          APP_CURATED_URI: ${{ vars.CURATED_URI }}
+        run: uv run python web/build.py
+
+      # Stránka je jeden soubor bez závislostí, takže "build" na straně Cloudflare
+      # není co dělat -- nahrává se hotový adresář.
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main
