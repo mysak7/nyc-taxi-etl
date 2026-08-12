@@ -72,6 +72,11 @@ jobs:
           tags: ${{ steps.tags.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Buildx přibaluje k image provenance a SBOM jako další manifesty v indexu.
+          # Lambda takový index odmítne ("manifest ... is not supported"), takže tady
+          # končí: pro doložení původu zůstává immutable tag `sha-<git sha>` v ECR.
+          provenance: false
+          sbom: false
 
       # Nasazuje se kód, ne konfigurace: role CI nemá UpdateFunctionConfiguration,
       # takže cesty k datům ani prahy tudy změnit nejdou -- ty patří do terraformu.
