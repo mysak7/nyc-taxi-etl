@@ -19,6 +19,7 @@ class Config:
     rejects_uri: str
     lookback_months: int
     source_stale_days: int
+    max_speed_mph: float
     max_distance_mi: float
     max_duration_min: float
     max_reject_ratio: float

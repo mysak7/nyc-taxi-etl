@@ -16,10 +16,22 @@ lookback_months = 6
 # Naměřené maximum lagu je 85 dní.
 source_stale_days = 120
 
-# Hranice věrohodnosti měření. Obvod Země je 24 901 mil; nejdelší "jízda" v 2025-01
-# má 276 423 mil. Vadná hodnota se nuluje, řádek zůstává.
-max_distance_mi = 200.0
-max_duration_min = 360.0
+# Hranice věrohodnosti měření. Vadná hodnota se nuluje, řádek zůstává.
+#
+# Vzdálenost se nechytá magnitudou, ale implikovanou rychlostí. Magnituda dělala v
+# 2025-01 obojí špatně naráz: minula 136 rozbitých jízd pod prahem (165,91 mil za 11,4
+# minuty za 17,70 $) a vynulovala 2 reálné dálkové (206 a 225 mil při 53-59 mph za 220
+# a 400 $). Ze 122 jízd nad 200 mil jich 118 poruší i rychlost, takže o záchyt nejdeme.
+# U 93 % řádků nad 100 mph sedí jízdné na dobu, ne na vzdálenost -> rozbitý je tachometr,
+# proto se nuluje `trip_distance`. Nejrychlejší věrohodná jízda má 62 mph.
+max_speed_mph = 100.0
+# Záložní magnituda pro řádky, kde rychlost nespočítám (doba <= 1 min; takových je
+# 38 420 a nejdelší z nich má 38 mil). Nejdelší věrohodná jízda v 2025-01 má 265,9 mil,
+# nejkratší nesmysl 669,54.
+max_distance_mi = 300.0
+# Práh 360 min nuloval 7 jízd s věrohodnou rychlostí (84,42 mil za 6,6 h za 484,60 $),
+# nad 480 min zbývají 3. Objem záchytu to nemění: 1203 -> 1135 řádků.
+max_duration_min = 480.0
 
 # Tvrdé prahy běhu. Naměřeno: karanténa 1,83 %, největší skok objemu mezi měsíci
 # +21,9 % (29 měsíců), vynulovaná vzdálenost 2,53 %, doba 0,09 %.

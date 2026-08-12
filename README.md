@@ -118,9 +118,19 @@ Naměřeno na 2025-01 (3 475 226 řádků), prahy mají rezervu z měření:
 | `total_amount <= 0` | 63 596 (1,83 %) | karanténa; objem do `refunds_usd` | karanténa > 20 % → fail |
 | pickup mimo měsíc | 22 | karanténa (partitioning) | |
 | `fare_amount < 0` | 144 118 | vynulovat `fare_amount` | |
-| `trip_distance <= 0` / `> 200 mi` | 90 893 / 122 | vynulovat `trip_distance` | > 10 % → fail |
-| doba `<= 0` / `> 6 h` | 2 051 / 1 203 | vynulovat `duration_min` | > 5 % → fail |
+| `trip_distance <= 0` / `> 300 mi` | 90 893 / 118 | vynulovat `trip_distance` | > 10 % → fail |
+| rychlost `> 100 mph` | 254 | vynulovat `trip_distance` | (týž práh) |
+| doba `<= 0` / `> 8 h` | 2 051 / 1 135 | vynulovat `duration_min` | > 5 % → fail |
 | objem proti předchozímu měsíci | — | — | ±40 % → fail |
+
+Vzdálenost se **neposuzuje magnitudou, ale nepoměrem k době**. Dřívější práh 200 mil
+dělal obě chyby naráz: minul 136 rozbitých jízd pod prahem (165,91 mil za 11,4 minuty za
+17,70 $) a zároveň vynuloval 2 reálné dálkové (206 a 225 mil při 53–59 mph, jízdné 220 a
+400 $ v tarifu 5). Ze 122 jízd nad 200 mil jich 118 poruší i rychlostní pravidlo, takže
+záchyt tím neklesl. Že je vadné pole *tachometr* a ne razítko, plyne z peněz: u 93 %
+řádků nad 100 mph sedí jízdné na dobu, ne na vzdálenost — medián 14,46 $ proti 301 $,
+které by odpovídaly naměřené vzdálenosti. Magnituda zůstává jako záloha pro řádky, kde je
+doba pod minutu a podíl nic neznamená.
 
 Práh ±40 % vychází z 29 změřených měsíců: největší skutečný skok byl +21,9 % (2024-09),
 největší pokles −13,5 % (2026-01). Vyřazené řádky nejdou do koše, ale do

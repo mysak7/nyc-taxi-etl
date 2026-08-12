@@ -98,6 +98,15 @@ def rules(cfg: Config, year: int, month: int) -> list[Rule]:
         Rule(
             "implausible_distance", pl.col("trip_distance") > cfg.max_distance_mi, "trip_distance"
         ),
+        # Tachometr se pozná na nepoměru k době, ne na velikosti: 165,91 mil za 11,4
+        # minuty je nesmysl, 225 mil za 3,8 hodiny je jízda do Bostonu. Doba pod minutu
+        # je moc malý jmenovatel na to, aby podíl něco znamenal -- tam platí magnituda.
+        Rule(
+            "impossible_speed",
+            (pl.col("duration_min") > 1)
+            & (pl.col("trip_distance") / (pl.col("duration_min") / 60) > cfg.max_speed_mph),
+            "trip_distance",
+        ),
         Rule("duration_over_limit", pl.col("duration_min") > cfg.max_duration_min, "duration_min"),
         Rule("nonpositive_duration", pl.col("duration_min") <= 0, "duration_min"),
         # Záporné jízdné u zaplacené jízdy je rozbité pole, ne fiktivní jízda.

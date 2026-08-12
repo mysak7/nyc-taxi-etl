@@ -28,11 +28,12 @@ duration = (
 
 pathologies = {
     "zero_distance": pl.col("trip_distance") <= 0,
-    "implausible_distance": pl.col("trip_distance") > 200,
+    "implausible_distance": pl.col("trip_distance") > 300,
+    "impossible_speed": (duration > 1) & (pl.col("trip_distance") / (duration / 60) > 100),
     "negative_fare": pl.col("fare_amount") < 0,
     "nonpositive_total": pl.col("total_amount") <= 0,
     "nonpositive_duration": duration <= 0,
-    "long_duration": duration > 360,
+    "long_duration": duration > 480,
     "unknown_zone": pl.col("PULocationID").is_in([264, 265]),
 }
 
