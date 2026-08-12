@@ -13,6 +13,9 @@ lambda = ["awslambdaric>=3.0", "boto3>=1.35"]
 dev = ["pytest>=8", "ruff>=0.6"]
 # Airflow je ~200 MB a slouží jen k import testu DAGu -- do image nepatří.
 airflow = ["apache-airflow>=3.0", "apache-airflow-providers-amazon>=9.0"]
+# Build stránky čte curated z S3. Boto3 je i v extra `lambda`, ale ten navíc táhne
+# awslambdaric, který v CI k ničemu není.
+web = ["boto3>=1.35"]
 
 [build-system]
 requires = ["hatchling"]

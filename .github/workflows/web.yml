@@ -29,7 +29,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv sync --frozen
+      # Skupina `web` přidává boto3: build čte curated z S3, ne z disku.
+      - run: uv sync --frozen --group web
 
       # Vlastní role, ne ta od CI: build stránky umí přečíst curated a nic víc.
       - uses: aws-actions/configure-aws-credentials@v4

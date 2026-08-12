@@ -1862,6 +1862,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+web = [
+    { name = "boto3" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1881,6 +1884,7 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.6" },
 ]
+web = [{ name = "boto3", specifier = ">=1.35" }]
 
 [[package]]
 name = "opentelemetry-api"
