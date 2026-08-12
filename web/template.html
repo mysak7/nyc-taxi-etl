@@ -916,8 +916,10 @@ function specRows(hostId, rows) {
 }
 
 function buildHeader() {
+  // Bez jména bucketu: to nese číslo AWS účtu a stránka je veřejná.
   document.getElementById("src").textContent =
-    "s3://" + DATA.source.bucket + " · " + DATA.source.region + " · dataset=" + DATA.dataset;
+    "nyc-taxi-etl · dataset=" + DATA.dataset + " · curated on " + DATA.source.store
+    + " (" + DATA.source.region + ")";
 
   const f = DATA.freshness;
   document.getElementById("status").innerHTML = [

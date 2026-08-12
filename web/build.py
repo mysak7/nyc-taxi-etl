@@ -15,6 +15,7 @@ Rozsah dat ve stránce je záměrně menší než curated: denní řady a top z�
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sys
 from datetime import date
@@ -132,7 +133,11 @@ def build() -> pathlib.Path:
     payload = {
         "dataset": "yellow",
         "generated_at": date.today().isoformat(),
-        "source": {"curated_uri": layout.curated_uri},
+        # Bez URI: jméno bucketu nese číslo AWS účtu a stránka je veřejná.
+        "source": {
+            "store": "S3" if layout.curated_uri.startswith("s3://") else "disk",
+            "region": os.environ.get("AWS_REGION", "eu-central-1"),
+        },
         "config": {key: getattr(cfg, key) for key in CONFIG_KEYS},
         "freshness": pipeline.check_freshness(cfg),
         "months": months,
