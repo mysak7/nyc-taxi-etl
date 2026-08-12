@@ -207,5 +207,12 @@ resource "aws_lambda_function" "app" {
     }
   }
 
+  # Terraform funkci založí, další verze nasazuje CI (`update-function-code`). Bez
+  # tohohle by každý `terraform apply` vrátil produkci na tag, který má člověk zrovna
+  # ve svém `-var`, tedy zpravidla o několik commitů zpátky -- a tiše.
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
+
   depends_on = [aws_cloudwatch_log_group.lambda]
 }
