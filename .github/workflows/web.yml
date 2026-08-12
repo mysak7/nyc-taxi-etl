@@ -43,8 +43,8 @@ jobs:
           APP_CURATED_URI: ${{ vars.CURATED_URI }}
         run: uv run python web/build.py
 
-      # Stránka je jeden soubor bez závislostí, takže "build" na straně Cloudflare
-      # není co dělat -- nahrává se hotový adresář.
+      # Obě stránky jsou samostatné soubory bez závislostí, takže "build" na straně
+      # Cloudflare není co dělat -- nahrává se hotový adresář.
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

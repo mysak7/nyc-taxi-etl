@@ -1,12 +1,25 @@
-"""Postaví statickou stránku z curated vrstvy.
+"""Postaví statické stránky z curated vrstvy.
 
     uv run python web/build.py                                  # z ./data/curated
     APP_CURATED_URI=s3://bucket/curated uv run python web/build.py
 
 Čte přes `storage`, takže lokální adresář i S3 jsou tentýž parametr -- stejně jako
-pro pipeline samotnou. Výstup je jeden soubor `web/dist/index.html` se zapečenými daty:
-celá historie je jednotky MB, takže agregát pro stránku se vejde do stovek kB a nic
-za běhu se nedotahuje. Žádné API, žádná databáze, nic, co by běželo mezi zobrazeními.
+pro pipeline samotnou. Data jsou zapečená v souboru: celá historie je jednotky MB,
+takže agregát pro stránku se vejde do stovek kB a nic za běhu se nedotahuje. Žádné API,
+žádná databáze, nic, co by běželo mezi zobrazeními.
+
+Stránky jsou dvě, protože čtenáři jsou dva. `index.html` odpovídá na otázku "co se v
+New Yorku jezdí" -- mapa, měsíce, zóny. `pipeline.html` odpovídá na "dá se tomu číslu
+věřit" -- manifesty, prahy, co pravidla chytila. Jedna stránka to měla obojí promíchané
+a ani jeden z těch dvou lidí na ní nenašel svoje.
+
+Rozdělený je i payload, ne jen sekce: mapa je zdaleka největší kus a na provozní stránce
+nemá co dělat, manifesty zase nemá co dělat na té datové. Každá stránka tak nese jen to,
+co doopravdy kreslí, a obě jsou menší než ta původní jedna.
+
+Skládá se to ze společných kusů (`style.css`, `common.js`) a dvojice per stránku
+(`data.html` + `data.js`, `pipeline.html` + `pipeline.js`). Výsledek je pořád jeden
+soubor na stránku -- žádný externí requestem tažený asset.
 
 Rozsah dat ve stránce je záměrně menší než curated: denní řady, top zóny a jeden
 agregát na zónu přes celou historii pro mapu -- ne všechny řádky. Kdo chce celý
@@ -33,6 +46,43 @@ from app.config import Config  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 TOP_ZONES = 25
+
+# Kostra je společná, liší se jen title, tělo a skript. Bez `<head>`: prohlížeč si ho
+# doplní sám a jediné, co by v něm bylo, je `<title>` a `<style>`, které platí i takhle.
+SHELL = """<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta name="description" content="__DESC__">
+<style>__STYLE__</style>
+<div class="rail"></div>
+__NAV__
+<main>
+__BODY__
+</main>
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>__SCRIPT__</script>
+"""
+
+# Odkazy jsou relativní bez lomítka, takže stránky fungují i otevřené z disku, a zároveň
+# sedí, když Cloudflare Pages naservíruje `pipeline.html` na `/pipeline`.
+NAV = (("index.html", "Data"), ("pipeline.html", "Pipeline"))
+
+PAGES = {
+    # jméno souboru -> (zdrojová dvojice, title, popis, klíče měsíců v payloadu)
+    "index.html": (
+        "data",
+        "NYC Yellow Taxi by zone",
+        "Yellow medallion taxi trips in New York, by pickup zone and by day.",
+        ("key", "year", "month", "trips", "revenue", "daily", "zones", "zones_total"),
+    ),
+    "pipeline.html": (
+        "pipeline",
+        "NYC Taxi pipeline & data quality",
+        "How the NYC taxi dataset is built: runs, manifests, quality rules and thresholds.",
+        ("key", "year", "month", "rows", "trips", "runs"),
+    ),
+}
 
 # Prahy a okna do sekce "The pipeline". Berou se ze stejné konfigurace jako pipeline,
 # aby stránka nemohla tvrdit jiná čísla, než podle kterých se běh doopravdy řídí.
@@ -216,7 +266,46 @@ def map_payload(monthly: list[pl.DataFrame]) -> dict:
     }
 
 
-def build() -> pathlib.Path:
+def nav(active: str) -> str:
+    tabs = ""
+    for href, text in NAV:
+        # `aria-current`, ne jen barva: která ze dvou stránek je otevřená, musí být
+        # k dispozici i odečítači obrazovky, ne jen oku.
+        on = ' aria-current="page"' if href == active else ""
+        tabs += f'<a class="tab" href="{href}"{on}>{text}</a>'
+    return (
+        '<nav class="topnav"><div class="wrap"><span class="brand">nyc-taxi-etl</span>'
+        f'<div class="tabs">{tabs}</div></div></nav>'
+    )
+
+
+def encode(payload: dict) -> str:
+    """Payload do `<script type="application/json">`.
+
+    `allow_nan=False`: NaN ani Infinity v JSONu neexistují, prohlížeč by na payloadu
+    spadl a stránka by zůstala prázdná. Ať to radši padne tady.
+    """
+    encoded = json.dumps(payload, separators=(",", ":"), default=str, allow_nan=False)
+    if "</script" in encoded:
+        raise SystemExit("payload obsahuje </script, stránka by se rozpadla")
+    return encoded
+
+
+def render(filename: str, name: str, title: str, desc: str, payload: dict, style: str) -> str:
+    """Poskládá stránku. `__PAYLOAD__` se dosazuje jako poslední -- v datech může být
+    cokoli, včetně řetězce, který vypadá jako další placeholder."""
+    page = (
+        SHELL.replace("__TITLE__", title)
+        .replace("__DESC__", desc)
+        .replace("__STYLE__", style)
+        .replace("__NAV__", nav(filename))
+        .replace("__BODY__", (HERE / f"{name}.html").read_text())
+        .replace("__SCRIPT__", (HERE / "common.js").read_text() + (HERE / f"{name}.js").read_text())
+    )
+    return page.replace("__PAYLOAD__", encode(payload))
+
+
+def build() -> list[pathlib.Path]:
     cfg = Config.load()
     layout = pipeline.layout(cfg)
 
@@ -225,36 +314,39 @@ def build() -> pathlib.Path:
         raise SystemExit(f"v {layout.curated_uri} nejsou žádné partition")
     months = [payload for payload, _ in built]
 
-    payload = {
+    # Co je na obou stránkách: odkud data jsou, kdy se to postavilo, jak čerstvý je zdroj.
+    # Bez URI curated -- jméno bucketu nese číslo AWS účtu a stránky jsou veřejné.
+    common = {
         "dataset": "yellow",
         "generated_at": date.today().isoformat(),
-        # Bez URI: jméno bucketu nese číslo AWS účtu a stránka je veřejná.
         "source": {
             "store": "S3" if layout.curated_uri.startswith("s3://") else "disk",
             "region": os.environ.get("AWS_REGION", "eu-central-1"),
         },
         "config": {key: getattr(cfg, key) for key in CONFIG_KEYS},
         "freshness": pipeline.check_freshness(cfg),
-        "months": months,
-        "map": map_payload([sums for _, sums in built]),
     }
 
-    # `allow_nan=False`: NaN ani Infinity v JSONu neexistují, prohlížeč by na payloadu
-    # spadl a stránka by zůstala prázdná. Ať to radši padne tady.
-    encoded = json.dumps(payload, separators=(",", ":"), default=str, allow_nan=False)
-    if "</script" in encoded:
-        raise SystemExit("payload obsahuje </script, stránka by se rozpadla")
+    style = (HERE / "style.css").read_text()
+    out_dir = HERE / "dist"
+    out_dir.mkdir(exist_ok=True)
 
-    out = HERE / "dist" / "index.html"
-    out.parent.mkdir(exist_ok=True)
-    out.write_text((HERE / "template.html").read_text().replace("__PAYLOAD__", encoded))
+    written = []
+    for filename, (name, title, desc, keys) in PAGES.items():
+        payload = common | {"months": [{k: m[k] for k in keys} for m in months]}
+        if name == "data":
+            payload["map"] = map_payload([sums for _, sums in built])
+
+        out = out_dir / filename
+        out.write_text(render(filename, name, title, desc, payload, style))
+        written.append(out)
+        print(f"{out} · {out.stat().st_size / 1024:.0f} kB")
 
     print(
-        f"{out} · {out.stat().st_size / 1024:.0f} kB · {len(months)} partition"
-        f" · {sum(len(m['runs']) for m in months)} manifestů"
+        f"{len(months)} partition · {sum(len(m['runs']) for m in months)} manifestů"
         f" · {months[0]['key']} → {months[-1]['key']}"
     )
-    return out
+    return written
 
 
 if __name__ == "__main__":

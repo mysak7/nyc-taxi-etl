@@ -283,7 +283,16 @@ tests/       fixture s ručně spočítanými čísly · kontrakt na dvou verzí
 dags/        nyc_taxi_etl.py
 infra/       main.tf (S3, ECR, Lambda) · orchestration.tf (Step Functions, scheduler,
              alarmy) · iam.tf (čtyři role a jejich hranice)
+web/         build.py (staví obě stránky z curated) · geo.py + zones.json (obrysy zón)
+             style.css + common.js (společné) · data.* (co se jezdí) · pipeline.* (provoz)
 ```
+
+Stránka je statická a jsou dvě, protože čtenáři jsou dva: `index.html` odpovídá na „co se
+v New Yorku jezdí" (mapa zón, měsíce, průměr vedle mediánu), `pipeline.html` na „dá se
+tomu číslu věřit" (manifesty běhů, prahy, co pravidla chytila). Rozdělený je i payload —
+mapa se na provozní stránku nedostane a manifesty na datovou, takže obě jsou menší než
+původní jedna. Nasazuje je [`.github/workflows/web.yml`](.github/workflows/web.yml) na
+Cloudflare Pages, po nočním běhu pipeline, ne jen při pushi.
 
 Fixture testy tvrdí **přesná** čísla spočítaná ručně (spadnou-li po změně logiky, je to
 jejich účel), testy nad reálným vzorkem netvrdí žádné konkrétní číslo, jen invarianty
