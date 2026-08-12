@@ -4,7 +4,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 # Data se nekomitují; vzorky v tests/data/ ano (vyrobí je tests/data/make_sample.py).
-data/
+# Lomítko vpředu je podstatné: `data/` sedí i na tests/data/, kde jsou vzorky testů.
+/data/
 
 # Terraform: stav obsahuje ARN i jména bucketů, .terraform je 500 MB providerů.
 infra/.terraform/
