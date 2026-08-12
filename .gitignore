@@ -16,3 +16,6 @@ infra/tfplan
 
 # Stránka je build artefakt: vyrábí ji web/build.py ze stavu curated, ne z gitu.
 web/dist/
+
+# wrangler si sem odklada stav mezi nasazenimi.
+.wrangler/
