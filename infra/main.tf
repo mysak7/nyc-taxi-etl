@@ -185,9 +185,12 @@ resource "aws_lambda_function" "app" {
   memory_size = 3008
   timeout     = 600
 
-  # Strop nákladů i dopadu: zaseknutý scheduler nevyrobí sto souběžných běhů.
-  # Dva mapované měsíce + freshness = 3, jeden navíc na ruční spuštění.
-  reserved_concurrent_executions = 4
+  # Strop souběhu by patřil sem (zaseknutý scheduler nevyrobí sto běhů), jenže tenhle
+  # účet má limit 10 souběžných spuštění na *celý* účet a sdílí ho s dvěma produkčními
+  # funkcemi. Rezervace čtyř by jim ubrala 40 % kapacity kvůli pipeline, která běží
+  # jednou denně. Skutečný strop je proto MaxConcurrency=2 v Map stavu; až účet dostane
+  # standardních 1000, patří sem `reserved_concurrent_executions = 4`.
+  # reserved_concurrent_executions = 4
 
   # Image nespouští argv, ale handler. Kompromis nezůstává v image, ale tady.
   image_config {

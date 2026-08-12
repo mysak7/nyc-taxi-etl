@@ -178,26 +178,64 @@ DAG [`dags/nyc_taxi_etl.py`](dags/nyc_taxi_etl.py) (Airflow 3.x): `detect_change
 - **Logy jsou JSON na stderr** se sdíleným kontextem (`run_id`, `year`, `month`), na stdout
   jde jen výsledek — výstup `detect` se dá poslat rovnou do `jq` nebo do mapped tasku.
 
-## Nasazení a scheduling (popsané, neimplementované)
+## Nasazení
 
-Není součástí odevzdání; zadání to připouští. Zvolený cíl je **týž image jako lokálně**
-nasazený jako Lambda container image:
+Běží na AWS ([`infra/`](infra), ~450 řádků Terraformu). **Týž image jako lokálně** jako
+Lambda container image, orchestrace ve Step Functions, spouštění EventBridge Schedulerem.
+Naměřeno na deployi: **15,3 mil. řádků ve 4 měsících za 22 s** wall-clock (souběh 2),
+prázdný běh 3,4 s.
 
-- **EventBridge Scheduler** → Lambda denně (nebo Airflow, když už v prostředí je — obojí
-  jen jinak spouští týž kontejner).
-- **raw i curated do S3**, ETag stav jako sidecar v S3 (kód se nemění, jen `APP_*_URI`).
-- **Logy v CloudWatch**, ruční spuštění = jeden `invoke`, historie běhů = CloudWatch Logs
-  plus `_runs/` manifesty vedle dat.
-- **Terraform ~100 řádků**, žádná VPC, náklady pod dolar měsíčně.
+```bash
+cd infra && terraform apply -var image_tag=sha-$(git rev-parse HEAD)
+aws stepfunctions start-execution --state-machine-arn <arn> --input '{}'
+aws stepfunctions start-execution --state-machine-arn <arn> \
+  --input '{"from":"2024-01","to":"2024-12","force":true}'   # backfill, týž stroj
+```
+
+Stavový stroj je ten samý graf jako DAG: `detect` → `Map` přes změněné měsíce (souběh 2,
+retry jen na `TransientError`) → `check-freshness`. Dva rozdíly proti naivnímu překladu:
+prázdný seznam měsíců Map přeskočí (většina běhů, 3 s), a **zelená exekuce nesmí lhát** —
+freshness sama nestačí, protože měsíc s novým ETagem, kterému spadl přepočet, má na S3
+pořád starý výstup a žádnou mezeru nedělá. Selhané měsíce se proto sbírají v `Map` a
+vyhodnotí na konci; jeden spadlý březen ale nezruší leden, který čeká ve frontě.
 
 Lambda container image nespouští `argv`, ale handler ([`lambda_handler.py`](src/app/lambda_handler.py)).
 Výchozí `ENTRYPOINT` image je proto CLI, protože ten příkaz píše člověk; Lambda si
 entrypoint přebíjí ve své `ImageConfig` na `python -m awslambdaric`. V image tím nezůstává
 žádný kompromis.
 
+Airflow DAG zůstává jako druhá varianta pro prostředí, kde Airflow už je — obojí jen jinak
+spouští týž kontejner, business logika je v aplikaci. Nasazují se navzájem výlučně.
+
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): ruff → pytest (včetně DagBag
 testu) → build multi-stage image (base pinnutý digestem, non-root) → push do GHCR
-s tagy `sha-<git sha>` a `latest`.
+(`sha-<git sha>`, `latest`) a do ECR (jen `sha-`, repozitář je `IMMUTABLE`) →
+`update-function-code`. **Žádný AWS klíč v GitHub Secrets**: role se přebírá přes OIDC
+a důvěřuje jen jedné větvi jednoho repozitáře.
+
+### Kdo co smí
+
+Čtyři role, žádná nemá „spouštět i měnit". Hranice jsou ověřené
+`iam simulate-principal-policy`, ne jen napsané:
+
+| role | smí | nesmí |
+|---|---|---|
+| `-lambda` | `GetObject`/`PutObject` na třech prefixech, zapsat log | **explicitní Deny na `DeleteObject`** — pipeline nikdy nemaže, přepis je Put přes týž klíč |
+| `-states` | `InvokeFunction` na jedné funkci | cokoli s daty |
+| `-ci` | push do jednoho ECR repa, `UpdateFunctionCode` | `UpdateFunctionConfiguration` — jinak by šlo přes `APP_*_URI` odklonit pipeline jinam bez změny v image |
+| `-operator` | `StartExecution`, číst logy a `curated/` | `InvokeFunction`, `UpdateStateMachine`, `raw/`, zápis kamkoli |
+
+Operátor tedy pipeline spustit může a jediná páka, kterou má, je vstup exekuce: rozsah
+měsíců a `force`. Rozsah je omezený na 60 měsíců přímo v handleru — vstup exekuce píše
+člověk, takže na něj neplatí „vstup je náš". Role se přebírá jen s MFA a na hodinu.
+
+Bucket: block public access, SSE, verzování (přepis partition je jediný zápis, který se
+nedá vzít zpět jinak), `Deny` na non-TLS přístup, lifecycle na staré verze `raw/`. Žádná
+VPC — není co do ní dát, jen odchozí HTTPS na CloudFront, a NAT s security groupou by byl
+další povrch k rozbití. Alarmy jsou dva: exekuce selhala **a** dva dny žádná nezačala —
+„nic neběží" jinak vypadá úplně stejně jako „všechno je v pořádku".
+
+Náklady: 30 běhů měsíčně × ~15 s × 3 GB + S3 + Step Functions ≈ **pod 1 USD/měsíc**.
 
 **Při výrazně větším objemu** se mění spouštěč, ne kód: do jednotek GB/měsíc stačí Lambda
 (dnes 56 MB vstupu, 146 MB v paměti, 4,9 s), nad 15 minut běhu týž image na Fargate nebo
@@ -206,9 +244,11 @@ mapped tasky. Spark by na tomhle objemu byl dekorace, která zdraží provoz i o
 
 ## Co chybí a proč
 
-- **Nasazení na AWS není spuštěné**, jen popsané — priorita byla, aby jádro (ETL, DQ,
-  testy, DAG, Docker, CI) bylo hotové a spustitelné. Terraform by v repu vypadal hezky, ale
-  hodnotit se dá i bez něj.
+- **Terraform state je lokální.** Stack aplikuje jeden člověk z jednoho místa; v týmu by
+  tu byl S3 backend se zámkem, jinak dva souběžné `apply` přepíšou stav. Backend je
+  v [`infra/main.tf`](infra/main.tf) připravený zakomentovaný.
+- **Odchozí provoz Lambdy není omezený na CloudFront.** Bez VPC to nejde a VPC by přidala
+  NAT a security groupu — víc povrchu než užitku pro funkci, která volá jednu doménu.
 - **Karanténa vyřazuje celý řádek**, takže storno vypadne i z `trips`. Objem storn je proto
   ve výstupu zvlášť (`refunds_usd`), ne schovaný v karanténě.
 - **`passenger_count` není ve výstupu** (NULL u 15,5 % řádků, Flex Fare). Pravidla mají
@@ -218,7 +258,8 @@ mapped tasky. Spark by na tomhle objemu byl dekorace, která zdraží provoz i o
   kolik se leden při přepočtu smí změnit" nikdo nezměřil a jediné vycucané číslo v řešení
   by bylo právě tohle.
 - **Raw bytes se přepisují, neverzují.** Lineage funguje odkazem (ETag + sha256 v
-  manifestu), ne archivem; historii bytes by na S3 držel bucket versioning.
+  manifestu), ne archivem. Verzování na bucketu je zapnuté, ale staré verze `raw/` mizí po
+  7 dnech: je to pojistka proti chybě v kódu, ne archiv zdroje — ten se dá stáhnout znovu.
 
 ## Struktura
 
@@ -228,7 +269,10 @@ src/app/     __main__.py (CLI) · pipeline.py (orchestrace) · transform.py (či
              errors.py · log.py · lambda_handler.py
 tests/       fixture s ručně spočítanými čísly · kontrakt na dvou verzích schématu
              idempotence zápisu · detekce práce bez sítě · DagBag import test
+             s3 větev storage proti fake klientovi (jinak se poprvé spustí až na Lambdě)
 dags/        nyc_taxi_etl.py
+infra/       main.tf (S3, ECR, Lambda) · orchestration.tf (Step Functions, scheduler,
+             alarmy) · iam.tf (čtyři role a jejich hranice)
 ```
 
 Fixture testy tvrdí **přesná** čísla spočítaná ručně (spadnou-li po změně logiky, je to
