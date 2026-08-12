@@ -367,6 +367,28 @@ select {
 .map path { stroke: var(--surface); stroke-width: 0.7; stroke-linejoin: round; }
 .map path.hl { fill: none; stroke: var(--ink); stroke-width: 2.6; pointer-events: none; }
 
+/* Přepínač metriky: viditelná řada, ne `select` v hlavičce sekce. Osm možností se do řady
+   vejde a je na první pohled vidět, že mapa jde přepnout -- rozbalovátko to netvrdí.
+   Skupiny odděluje mezera: součty, průměry na jízdu, poměry mezi průměry. */
+.metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
+.metrics .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 2px 5px; }
+
+.mbtn {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1;
+  padding: 6px 11px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mbtn:hover { background: var(--hover); color: var(--ink); }
+.mbtn[aria-pressed="true"] { background: var(--s1-soft); border-color: var(--s1); color: var(--ink); font-weight: 600; }
+
 /* Rampa se čte zleva doprava jako jedna škála, popisky sedí na hranách mezi poli. */
 .ramp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
 .ramp .steps { display: flex; }
@@ -396,7 +418,7 @@ select {
   z-index: 5;
 }
 .tip[hidden] { display: none; }
-.tip b { font-weight: 600; }
+.tip b { font-weight: 600; color: var(--ink); }
 .tip .r { color: var(--ink-2); }
 
 details { border-top: 1px solid var(--rule); margin-top: 14px; padding-top: 10px; }
@@ -545,10 +567,7 @@ footer { border-top: 1px solid var(--rule); padding-top: 20px; display: flex; fl
 <section>
   <div class="sec-head">
     <h2>The map</h2>
-    <div class="picker">
-      <label class="hint" for="metric-select">colour by</label>
-      <select id="metric-select" aria-label="Colour the map by"></select>
-    </div>
+    <p class="hint">eight metrics · whole history</p>
   </div>
   <p class="note">
     Every trip carries the pickup zone it started in, so the curated layer is already a map —
@@ -564,6 +583,8 @@ footer { border-top: 1px solid var(--rule); padding-top: 20px; display: flex; fl
       equal-width bands would paint everything except Midtown the same shade. Means built on a
       handful of trips are noisy, so the tooltip always shows the trip count underneath them.
     </p>
+    <div class="metrics" id="metric-picker" role="group" aria-label="Colour the map by"></div>
+    <p class="cap" id="map-about"></p>
     <div class="ramp" id="map-legend"></div>
     <div class="plot map" id="zonemap"></div>
     <p class="hint" id="map-foot"></p>
@@ -700,7 +721,15 @@ const usd = (v) => "$" + nf.format(Math.round(v));
 // Průměr bez pozorování přijde z buildu jako null. Pomlčka, ne "0.00" -- to by bylo
 // tvrzení o datech, které jsme neudělali.
 const orDash = (v, fn) => (v == null ? "—" : fn(v));
+const pct = (v) => nf1.format(v * 100) + " %";
 const usdM = (v) => "$" + nf1.format(v / 1e6) + "M";
+// Zóny se v tržbě liší o šest řádů: Midtown miliardy, Rossville tisíce. Jedna jednotka
+// pro všechny by půlku legendy mapy proměnila v "$0.0M".
+const usdCompact = (v) =>
+  v >= 1e9 ? "$" + nf2.format(v / 1e9) + "B"
+    : v >= 1e6 ? "$" + nf1.format(v / 1e6) + "M"
+    : v >= 1e3 ? "$" + Math.round(v / 1e3) + "k"
+    : "$" + Math.round(v);
 // Přes miliardu už "3214M" nikdo nepřečte.
 const usdBig = (v) => (v >= 1e9 ? "$" + nf2.format(v / 1e9) + "B" : "$" + nf.format(Math.round(v / 1e6)) + "M");
 const label = (m) => MONTH_NAMES[m.month - 1] + " " + m.year;
@@ -963,30 +992,81 @@ function drawBars(host, items, opts) {
 
 // Součty jdou sečíst, průměry ne -- vážený průměr přes zóny je v payloadu už spočítaný,
 // tady se jen vybírá sloupec a formátuje.
+//
+// Tři skupiny, protože každá stojí na jiném jmenovateli a čte se jinak: součet za zónu
+// (obarví se prostě to, kde je nejvíc provozu), průměr na jízdu, a poměr dvou průměrů.
+// Poslední skupina je odvozená -- rychlost ani cena za míli v curated jako sloupec není
+// a nemůže být: průměr podílů se z předpočítaného průměru nedá dostat zpátky. Proto je
+// to podíl průměrů a `about` to u každé takové metriky říká nahlas.
+// Jmenovatel nula nebo chybějící čitatel dá null, ne NaN: mapa má tři stavy a "nevíme"
+// nesmí propadnout do některého z těch dvou zbylých.
+const ratio = (num, den, scale = 1) => (num != null && den ? (num / den) * scale : null);
+
 const METRICS = {
   trips: {
+    group: "totals",
     label: "Published trips",
+    about: "Trips attributed to the pickup zone, summed over the whole curated history.",
     of: (z) => z.trips,
     full: (v) => nf.format(v) + " trips",
     short: (v) => (v >= 1e6 ? nf1.format(v / 1e6) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : nf.format(v)),
   },
   revenue: {
+    group: "totals",
     label: "Revenue",
+    about: "Gross <code>total_amount</code> of the published trips — tips, tolls and surcharges included. Refunds are reported separately and are not netted off.",
     of: (z) => z.revenue,
     full: (v) => usd(v),
-    short: (v) => (v >= 1e6 ? "$" + nf1.format(v / 1e6) + "M" : "$" + Math.round(v / 1e3) + "k"),
+    brief: usdCompact,
+    short: usdCompact,
+  },
+  revenue_per_trip: {
+    group: "means",
+    label: "Revenue / trip",
+    about: "Revenue divided by trips. Every published row has a total, so this one denominator is exact — unlike the means below it, which are built on the rows that had a usable value.",
+    of: (z) => ratio(z.revenue, z.trips),
+    full: (v) => "$" + nf2.format(v),
+    short: (v) => "$" + nf1.format(v),
   },
   avg_fare_usd: {
+    group: "means",
     label: "Mean fare",
+    about: "<code>fare_amount</code> only: the metered fare, without tip, tolls or surcharges. Lower than revenue per trip everywhere, and the gap is itself the interesting part.",
     of: (z) => z.avg_fare_usd,
     full: (v) => "$" + nf2.format(v),
     short: (v) => "$" + Math.round(v),
   },
   avg_distance_mi: {
+    group: "means",
     label: "Mean distance",
+    about: "Miles per trip. The mean is pulled up by a handful of enormous rows — the table at the bottom of the page puts it next to the median.",
     of: (z) => z.avg_distance_mi,
     full: (v) => nf2.format(v) + " mi",
     short: (v) => nf1.format(v),
+  },
+  avg_duration_min: {
+    group: "means",
+    label: "Mean duration",
+    about: "Minutes per trip, from pickup to dropoff. Non-positive durations are nulled by a quality rule, so they do not drag this down.",
+    of: (z) => z.avg_duration_min,
+    full: (v) => nf1.format(v) + " min",
+    short: (v) => nf1.format(v),
+  },
+  speed_mph: {
+    group: "ratios",
+    label: "Implied speed",
+    about: "Mean distance over mean duration — a ratio of two means, not the mean of per-trip speeds, and the two are built on different sets of rows. Where a zone's distance coverage sits far below its duration coverage the result is an artefact of that gap rather than a speed, which is why the tooltip carries both.",
+    of: (z) => ratio(z.avg_distance_mi, z.avg_duration_min, 60),
+    full: (v) => nf1.format(v) + " mph",
+    short: (v) => nf1.format(v),
+  },
+  fare_per_mile: {
+    group: "ratios",
+    label: "Fare / mile",
+    about: "Mean fare over mean distance. High where trips are short and stop-start, low where they are long runs — the meter charges for time as well as distance.",
+    of: (z) => ratio(z.avg_fare_usd, z.avg_distance_mi),
+    full: (v) => "$" + nf2.format(v) + " / mi",
+    short: (v) => "$" + nf1.format(v),
   },
 };
 
@@ -1042,6 +1122,14 @@ function drawMap(host) {
     // Tři různé stavy, ne dva: zóna bez řádku v curated, zóna s jízdami ale bez
     // pozorování, ze kterého by šel průměr spočítat, a zóna s číslem.
     const missing = z ? "no " + spec.label.toLowerCase() + " recorded" : "no trips in curated";
+    // Bublina nese celý profil zóny, ne jen obarvenou metriku, a tučně je v něm to, čím
+    // je zrovna obarveno. Přepínač tak nemění, co se dá přečíst -- jen kam se dívat.
+    const cell = (key) => {
+      const s = METRICS[key];
+      const v = z ? s.of(z) : null;
+      const text = v == null || !isFinite(v) ? "—" : (s.brief || s.full)(v);
+      return key === metric ? `<b>${text}</b>` : text;
+    };
     const shape = el("path", { d, fill: known ? `var(--m${bucketOf(value, edges) + 1})` : "var(--m0)" });
     shape.appendChild(el("title", {}, named[0] + ": " + (known ? spec.full(value) : missing)));
 
@@ -1051,12 +1139,17 @@ function drawMap(host) {
       highlight.setAttribute("d", d);
       const box = host.getBoundingClientRect();
       tip.innerHTML = z
-        ? `<b>${named[0]}</b> · ${named[1]}<br>${nf.format(z.trips)} trips · ${usdM(z.revenue)}`
-          + `<br><span class="r">mean ${orDash(z.avg_fare_usd, (v) => "$" + nf2.format(v))}`
-          + ` · ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}`
-          + ` · coverage ${orDash(z.coverage, (v) => nf1.format(v * 100) + " %")}</span>`
+        ? [
+            `<b>${named[0]}</b> · ${named[1]}`,
+            `${cell("trips")} · ${cell("revenue")}`,
+            `<span class="r">${cell("revenue_per_trip")} / trip · ${cell("avg_fare_usd")} fare`
+              + ` · ${cell("avg_distance_mi")} · ${cell("avg_duration_min")}</span>`,
+            `<span class="r">${cell("speed_mph")} · ${cell("fare_per_mile")}</span>`,
+            `<span class="r">coverage ${orDash(z.coverage, pct)} distance`
+              + ` · ${orDash(z.duration_coverage, pct)} duration</span>`,
+          ].concat(known ? [] : [`<span class="r">${missing}</span>`]).join("<br>")
         : `<b>${named[0]}</b> · ${named[1]}<br><span class="r">${missing}</span>`;
-      placeTip(tip, host, event.clientX - box.left, event.clientY - box.top - 84);
+      placeTip(tip, host, event.clientX - box.left, event.clientY - box.top - 104);
     });
     svg.appendChild(shape);
   }
@@ -1074,6 +1167,10 @@ function drawMap(host) {
     + `<span class="nodata"><i class="swatch" style="background:var(--m0)"></i>no trips in curated</span>`;
 
   document.getElementById("map-title").textContent = spec.label + " by pickup zone";
+  document.getElementById("map-about").innerHTML = spec.about;
+  document.querySelectorAll("#metric-picker .mbtn").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.metric === metric));
+  });
 
   const off = M.off_map;
   document.getElementById("map-foot").textContent =
@@ -1200,12 +1297,19 @@ function buildRuns() {
 }
 
 function buildMetricPicker() {
-  const sel = document.getElementById("metric-select");
-  sel.innerHTML = Object.entries(METRICS)
-    .map(([key, spec]) => `<option value="${key}">${spec.label}</option>`).join("");
-  sel.addEventListener("change", (event) => {
-    metric = event.target.value;
-    drawMap(document.getElementById("zonemap"));
+  const host = document.getElementById("metric-picker");
+  let group = null;
+  host.innerHTML = Object.entries(METRICS).map(([key, spec]) => {
+    const sep = group && spec.group !== group ? '<span class="sep" aria-hidden="true"></span>' : "";
+    group = spec.group;
+    return sep + `<button class="mbtn" type="button" data-metric="${key}" aria-pressed="false">${spec.label}</button>`;
+  }).join("");
+
+  host.querySelectorAll(".mbtn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      metric = btn.dataset.metric;
+      drawMap(document.getElementById("zonemap"));
+    });
   });
 }
 

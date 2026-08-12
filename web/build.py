@@ -86,6 +86,8 @@ def zone_sums(frame: pl.DataFrame) -> pl.DataFrame:
         pl.col("distance_obs").sum().alias("distance_obs"),
         (pl.col("avg_distance_mi") * pl.col("distance_obs")).sum().alias("_dist"),
         pl.col("median_distance_mi").median().round(2).alias("median_distance_mi"),
+        pl.col("duration_obs").sum().alias("duration_obs"),
+        (pl.col("avg_duration_min") * pl.col("duration_obs")).sum().alias("_dur"),
         (pl.col("avg_fare_usd") * pl.col("fare_obs")).sum().alias("_fare"),
         pl.col("fare_obs").sum().alias("fare_obs"),
     )
@@ -102,14 +104,23 @@ def zone_stats(sums: pl.DataFrame) -> pl.DataFrame:
             avg_distance_mi=pl.when(pl.col("distance_obs") > 0)
             .then(pl.col("_dist") / pl.col("distance_obs"))
             .round(2),
+            avg_duration_min=pl.when(pl.col("duration_obs") > 0)
+            .then(pl.col("_dur") / pl.col("duration_obs"))
+            .round(2),
             avg_fare_usd=pl.when(pl.col("fare_obs") > 0)
             .then(pl.col("_fare") / pl.col("fare_obs"))
             .round(2),
+            # `coverage` je jmenovatel vzdálenosti -- ten nese tabulka mean/median níž na
+            # stránce. Doba jízdy má svůj vlastní a liší se: na mapě se dá obarvit rychlost,
+            # která stojí na obou, takže musí být vidět oba.
             coverage=pl.when(pl.col("trips") > 0)
             .then(pl.col("distance_obs") / pl.col("trips"))
             .round(4),
+            duration_coverage=pl.when(pl.col("trips") > 0)
+            .then(pl.col("duration_obs") / pl.col("trips"))
+            .round(4),
         )
-        .drop("_dist", "_fare")
+        .drop("_dist", "_dur", "_fare")
         .sort("trips", descending=True)
     )
 
@@ -126,6 +137,8 @@ def merge_zone_sums(monthly: list[pl.DataFrame]) -> pl.DataFrame:
             pl.col("distance_obs").sum(),
             pl.col("_dist").sum(),
             pl.col("median_distance_mi").median().round(2),
+            pl.col("duration_obs").sum(),
+            pl.col("_dur").sum(),
             pl.col("_fare").sum(),
             pl.col("fare_obs").sum(),
         )
@@ -180,7 +193,9 @@ def map_payload(monthly: list[pl.DataFrame]) -> dict:
         "revenue",
         "avg_fare_usd",
         "avg_distance_mi",
+        "avg_duration_min",
         "coverage",
+        "duration_coverage",
     )
 
     # Zóny 264/265 ("NV", "Outside of NYC") žádný obrys nemají a mít nebudou: nejsou to
