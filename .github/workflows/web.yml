@@ -18,6 +18,9 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Dokud nejsou nastavené proměnné repozitáře, job se přeskočí. Jinak by noční
+    # cron červenal na nedokončené konfiguraci a po týdnu by si ho nikdo nevšiml.
+    if: vars.AWS_WEB_ROLE_ARN != '' && vars.CF_PAGES_PROJECT != ''
     permissions:
       contents: read
       id-token: write # OIDC token pro AWS; bez něj by tu musel být přístupový klíč
