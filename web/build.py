@@ -8,18 +8,21 @@ pro pipeline samotnou. Data jsou zapečená v souboru: celá historie je jednotk
 takže agregát pro stránku se vejde do stovek kB a nic za běhu se nedotahuje. Žádné API,
 žádná databáze, nic, co by běželo mezi zobrazeními.
 
-Stránky jsou tři, protože otázky jsou tři. `index.html` odpovídá na "co se v New Yorku
+Stránky jsou čtyři, protože otázky jsou čtyři. `index.html` odpovídá na "co se v New Yorku
 jezdí" -- mapa, měsíce, zóny; je psaná tak, jako by byla veřejná produkční stránka, a
 metodické komentáře na ní nejsou. `method.html` odpovídá na "proč jsou ta čísla taková"
 -- co by udělal snadný postup, co by stál a co se dělá místo toho. `pipeline.html`
 odpovídá na "dá se tomu běhu věřit" -- manifesty, prahy, co pravidla chytila.
+`quarantine.html` odpovídá na "co v těch číslech není" -- karanténa rozepsaná po měsících,
+důvod po důvodu.
 
 Rozdělený je i payload, ne jen sekce: mapa je zdaleka největší kus a na provozní ani
 metodické stránce nemá co dělat, manifesty zase nemá co dělat na té datové. Každá
 stránka tak nese jen to, co doopravdy kreslí.
 
 Skládá se to ze společných kusů (`style.css`, `common.js`) a dvojice per stránku
-(`data.html` + `data.js`, `method.html` + `method.js`, `pipeline.html` + `pipeline.js`).
+(`data.html` + `data.js`, `method.html` + `method.js`, `pipeline.html` + `pipeline.js`,
+`quarantine.html` + `quarantine.js`).
 Výsledek je pořád jeden soubor na stránku -- žádný externí requestem tažený asset.
 
 Rozsah dat ve stránce je záměrně menší než curated: denní řady, top zóny a jeden
@@ -68,7 +71,12 @@ __BODY__
 
 # Odkazy jsou relativní bez lomítka, takže stránky fungují i otevřené z disku, a zároveň
 # sedí, když Cloudflare Pages naservíruje `pipeline.html` na `/pipeline`.
-NAV = (("index.html", "Data"), ("method.html", "Metodika"), ("pipeline.html", "Pipeline"))
+NAV = (
+    ("index.html", "Data"),
+    ("method.html", "Metodika"),
+    ("pipeline.html", "Pipeline"),
+    ("quarantine.html", "Karanténa"),
+)
 
 PAGES = {
     # jméno souboru -> (zdrojová dvojice, title, popis, klíče měsíců v payloadu)
@@ -103,6 +111,16 @@ PAGES = {
         "Pipeline a kvalita dat NYC Taxi",
         "Jak dataset newyorských taxíků vzniká: běhy, manifesty, pravidla kvality a prahy.",
         ("key", "year", "month", "rows", "trips", "runs"),
+    ),
+    # Karanténa je řada, ne jeden běh: potřebuje manifesty všech měsíců a k nim `refunds`
+    # z curated -- objem storn je jediné, co o odmítnutých řádcích říká peníze, a
+    # v manifestu není. Mapa ani denní řady tu nemají co dělat.
+    "quarantine.html": (
+        "quarantine",
+        "Karanténa NYC Taxi: co se vyhodilo",
+        "Které řádky datasetu newyorských taxíků neprošly, měsíc po měsíci: důvod,"
+        " počet, podíl a objem storn.",
+        ("key", "year", "month", "rows", "refunds", "runs"),
     ),
 }
 

@@ -1,0 +1,160 @@
+<header>
+  <p class="eyebrow" id="src"></p>
+  <h1>Co se vyhodilo</h1>
+  <p class="lead">
+    Karanténa je jediné místo, kde se z datasetu něco ztrácí — tak ať je vidět celá, měsíc
+    po měsíci. Každé číslo na téhle stránce pochází z manifestu běhu, který ten měsíc
+    naposledy zapsal, ne z odhadu.
+  </p>
+  <p class="lead">
+    Vyhazuje se dvojím způsobem a nesmí se to plést. <strong>Do karantény jde celý
+    řádek</strong>, když z něj neplyne žádná kladná útrata nebo když vůbec nepatří do
+    zpracovávaného měsíce. <strong>Vynulování zahodí jednu hodnotu</strong> — řádek, jeho
+    jízda i jeho peníze zůstávají ve výstupu, jen přestane mluvit do průměru, který by
+    zkreslil.
+  </p>
+  <div class="status" id="status"></div>
+</header>
+
+<section>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>Karanténa po měsících</h2>
+    <p class="hint">podíl na vstupních řádcích · kliknutím vyberete měsíc</p>
+  </div>
+  <p class="note">
+    Sloupec je jeden měsíc, výška je podíl odmítnutých řádků na zdrojových. Práh běhu je
+    <strong id="reject-limit"></strong> — kdyby ho měsíc překročil, nezveřejnil by se vůbec,
+    takže žádný sloupec, který tady vidíte, k němu nebyl ani blízko.
+  </p>
+  <div class="card">
+    <h3>Podíl odmítnutých řádků</h3>
+    <p class="cap" id="stack-cap"></p>
+    <div class="legend" id="stack-legend"></div>
+    <div class="plot" id="stack"></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>Rozpis</h2>
+    <p class="hint">kliknutím na řádek načtete rozpis pravidel toho měsíce níž</p>
+  </div>
+  <p class="note">
+    Levá polovina tabulky jsou <strong>odmítnuté řádky</strong> (mizí z výstupu, leží
+    v Parquetu odmítnutých), pravá <strong>vynulovaná pole</strong> (řádek zůstává, ztrácí
+    se jedno měření). Součet obou důvodů odmítnutí může být větší než sloupec „v karanténě“:
+    jeden řádek může porušit obě pravidla naráz a v karanténě je pak jednou.
+  </p>
+  <div class="scroll">
+    <table class="runs" id="ledger-table">
+      <thead>
+        <tr>
+          <th>Měsíc</th>
+          <th class="num">Vstupní řádky</th>
+          <th class="num">V karanténě</th>
+          <th class="num">Podíl</th>
+          <th class="num">Mimo měsíc</th>
+          <th class="num">Nekladná částka</th>
+          <th class="num">Objem storn</th>
+          <th class="num">Vynul. vzdálenost</th>
+          <th class="num">Vynul. doba</th>
+          <th class="num">Vynul. jízdné</th>
+        </tr>
+      </thead>
+      <tbody id="months"></tbody>
+      <tfoot id="months-total"></tfoot>
+    </table>
+  </div>
+  <p class="hint" id="months-foot"></p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>Rozpis pravidel</h2>
+    <div class="picker">
+      <button class="step-btn" type="button" id="prev" aria-label="Předchozí měsíc">◀</button>
+      <select id="month-select" aria-label="Vyberte měsíc"></select>
+      <button class="step-btn" type="button" id="next" aria-label="Následující měsíc">▶</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Kam řádky v tomhle měsíci šly</h3>
+    <p class="cap" id="funnel-cap"></p>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--s1)"></i>zveřejněno</span>
+      <span><i class="swatch" style="background:var(--s2)"></i>v karanténě</span>
+    </div>
+    <div class="plot" id="funnel"></div>
+  </div>
+
+  <div class="card">
+    <h3>Co které pravidlo v tomhle měsíci udělalo</h3>
+    <p class="cap" id="rules-cap"></p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Pravidlo</th>
+            <th>Důsledek</th>
+            <th>Dotčené pole</th>
+            <th class="num">Řádků</th>
+            <th class="num">Podíl vstupu</th>
+          </tr>
+        </thead>
+        <tbody id="rules"></tbody>
+      </table>
+    </div>
+    <p class="note" id="overlap"></p>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h3>Kde ty řádky leží</h3>
+    <p class="cap">Nic se nemaže. Odmítnutý řádek se zapisuje celý, i se svým důvodem.</p>
+    <dl class="spec" id="spec-keep"></dl>
+    <p class="note">
+      Tahle stránka se staví <strong>jen z manifestů ve vrstvě curated</strong> — role, která
+      ji v CI sestavuje, na prefix <code>rejects/</code> ani na <code>raw/</code> nedosáhne.
+      Proto tu jsou počty a důvody, ne samotné odmítnuté řádky: veřejná stránka nemá nést
+      surová data zdroje a build k nim nemá mít přístup, i kdyby chtěl. Kdo potřebuje
+      konkrétní řádky, čte <code>rejects.parquet</code> v bucketu.
+    </p>
+    <p class="note">
+      Peníze má z odmítnutých řádků jen jeden důvod: nekladná celková částka jsou storna
+      a ta se vykazují v <code>refunds_usd</code>, takže z datasetu nezmizí, jen se sečtou
+      zvlášť a odečtou od hrubé tržby. Řádky <em>mimo měsíc</em> vlastní částku nedostanou
+      nikam — patří do jiné partition, kde je zdroj taky publikuje.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="crosslink">
+    <p class="t">
+      <b>Proč jsou pravidla právě taková</b> — proti čemu se každý práh měřil a co by
+      zahazování celých řádků stálo.
+    </p>
+    <a href="method.html">◂ Metodika</a>
+  </div>
+  <div class="crosslink">
+    <p class="t">
+      <b>Běhy, které to zapsaly</b> — manifesty, spouštěče, ETagy zdroje a chování při selhání.
+    </p>
+    <a href="pipeline.html">Pipeline ▸</a>
+  </div>
+</section>
+
+<footer>
+  <p class="eyebrow">O téhle stránce</p>
+  <p class="note">
+    Počítáno z nejnovějšího manifestu každé partition. Starší manifesty popisují data, která
+    už v curated nejsou — sečíst je dohromady by karanténu nafouklo o přepočty téhož měsíce.
+  </p>
+  <p class="hint" id="foot"></p>
+</footer>
