@@ -232,6 +232,12 @@ function drawMap(host) {
   const spec = METRICS[metric];
   host.querySelectorAll("svg").forEach((n) => n.remove());
 
+  // Rampa se mění po skupinách, ne po metrikách: odstín nese "čteš součet / průměr na
+  // jízdu / poměr dvou průměrů", což je ta informace, kvůli které se jinak musí číst
+  // titulek. Uvnitř skupiny zůstává stejný, aby šly dvě příbuzné metriky porovnat.
+  // Sada `--m1..--m6` je pořád sekvenční, jednoodstínová -- mění se jen který odstín.
+  document.documentElement.dataset.ramp = spec.group;
+
   const stats = new Map(M.zones.map((z) => [String(z.location_id), z]));
   const values = Object.keys(M.paths)
     .map((id) => stats.get(id))

@@ -15,15 +15,15 @@
   --hover: rgba(11, 11, 11, 0.04);
   --good: #0ca30c;
   --shadow: 0 1px 2px rgba(11, 11, 11, 0.05);
-  /* Sekvenční rampa mapy: jeden odstín, šest kroků. Zóna bez dat je --m0, a je to
-     odstín šedé, ne nejsvětlejší modrá -- "nula jízd" a "nevíme" nesmí vypadat stejně. */
+  /* Sekvenční rampy mapy: jeden odstín, šest kroků, jedna rampa na skupinu metrik
+     (součty modře, průměry zeleně, poměry fialově). Rampa se nikdy nemíchá s jinou --
+     mapa vždycky ukazuje jednu metriku, odstín říká jen ze které skupiny je.
+     Zóna bez dat je --m0, a je to odstín šedé, ne nejsvětlejší krok rampy --
+     "nula jízd" a "nevíme" nesmí vypadat stejně. */
   --m0: #e7e5dd;
-  --m1: #e4eefb;
-  --m2: #bed8f2;
-  --m3: #8fbce6;
-  --m4: #5c9ad8;
-  --m5: #2f7ac4;
-  --m6: #14528f;
+  --a1: #e4eefb; --a2: #bed8f2; --a3: #8fbce6; --a4: #5c9ad8; --a5: #2f7ac4; --a6: #14528f;
+  --b1: #e2f2ec; --b2: #b9e0d3; --b3: #86c9b4; --b4: #4fae94; --b5: #2b8f76; --b6: #106051;
+  --c1: #f0eafa; --c2: #d7c6f0; --c3: #b99ee3; --c4: #9873d3; --c5: #7a4fbb; --c6: #52307f;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -44,12 +44,9 @@
     --good: #0ca30c;
     --shadow: none;
     --m0: #2a2a27;
-    --m1: #16283d;
-    --m2: #1c3f65;
-    --m3: #23578e;
-    --m4: #2f72b8;
-    --m5: #4a92da;
-    --m6: #82b9ee;
+    --a1: #16283d; --a2: #1c3f65; --a3: #23578e; --a4: #2f72b8; --a5: #4a92da; --a6: #82b9ee;
+    --b1: #102b25; --b2: #16443a; --b3: #1c5f50; --b4: #257f6b; --b5: #43a58d; --b6: #78c9b2;
+    --c1: #221a36; --c2: #33265a; --c3: #452f80; --c4: #5b41a5; --c5: #7c63c4; --c6: #a894e0;
   }
 }
 :root[data-theme="dark"] {
@@ -70,12 +67,25 @@
   --good: #0ca30c;
   --shadow: none;
   --m0: #2a2a27;
-  --m1: #16283d;
-  --m2: #1c3f65;
-  --m3: #23578e;
-  --m4: #2f72b8;
-  --m5: #4a92da;
-  --m6: #82b9ee;
+  --a1: #16283d; --a2: #1c3f65; --a3: #23578e; --a4: #2f72b8; --a5: #4a92da; --a6: #82b9ee;
+  --b1: #102b25; --b2: #16443a; --b3: #1c5f50; --b4: #257f6b; --b5: #43a58d; --b6: #78c9b2;
+  --c1: #221a36; --c2: #33265a; --c3: #452f80; --c4: #5b41a5; --c5: #7c63c4; --c6: #a894e0;
+}
+
+/* Aktivní rampa. Nezávislé na motivu -- přemapovává jen `--m*` na jednu ze tří rampových
+   sad, jejichž hodnoty si každý motiv definuje sám. `--mk` je klíčová barva rampy pro
+   ovládání (zamáčknuté tlačítko v přepínači), aby přepínač a mapa mluvily stejnou barvou. */
+:root, :root[data-ramp="totals"] {
+  --m1: var(--a1); --m2: var(--a2); --m3: var(--a3); --m4: var(--a4); --m5: var(--a5); --m6: var(--a6);
+  --mk: var(--a5);
+}
+:root[data-ramp="means"] {
+  --m1: var(--b1); --m2: var(--b2); --m3: var(--b3); --m4: var(--b4); --m5: var(--b5); --m6: var(--b6);
+  --mk: var(--b5);
+}
+:root[data-ramp="ratios"] {
+  --m1: var(--c1); --m2: var(--c2); --m3: var(--c3); --m4: var(--c4); --m5: var(--c5); --m6: var(--c6);
+  --mk: var(--c5);
 }
 
 :root {
@@ -385,7 +395,12 @@ select {
 }
 
 .mbtn:hover { background: var(--hover); color: var(--ink); }
-.mbtn[aria-pressed="true"] { background: var(--s1-soft); border-color: var(--s1); color: var(--ink); font-weight: 600; }
+.mbtn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--mk) 15%, transparent);
+  border-color: var(--mk);
+  color: var(--ink);
+  font-weight: 600;
+}
 
 /* Rampa se čte zleva doprava jako jedna škála, popisky sedí na hranách mezi poli. */
 .ramp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
