@@ -1,50 +1,269 @@
-/* Stránka pro čtenáře dat: mapa, měsíční řady, zóny. Nic o běhu pipeline -- provozní
-   čísla, manifesty a prahy jsou na `pipeline.html` a payload je sem ani nedostane. */
+/* Stránka pro čtenáře dat. Nic o běhu pipeline -- provozní čísla, manifesty a prahy
+   jsou na `pipeline.html` a payload je sem ani nedostane.
 
-/* ---------- graf: celá historie ---------- */
+   Celá stránka je jeden řízený pohled: nahoře se vybere měsíc a metrika a všechno pod
+   tím je z toho měsíce a v té metrice. Výjimka je jediná a je logická -- graf "měsíc po
+   měsíci" ukazuje všechny měsíce, protože jinak by ukazoval jeden sloupec.
+
+   Drží to pohromadě jeden tvar dat. Payload nenese hotové průměry, ale sčitatelné
+   součty a jejich jmenovatele, takže "řez" -- zóna v měsíci, jeden den, celý měsíc,
+   celá historie -- je vždycky týž objekt a metrika je funkce nad ním. Mapa, denní
+   křivka, žebříček zón i dlaždice proto počítají touž definicí; nemůže se stát, že by
+   dvě místa na stránce tvrdila o téže věci jiné číslo. */
+
+/* ---------- řezy dat ---------- */
+
+const MAP = DATA.map;
+const IDS = MAP.ids;
+// Sloupce měsíce jsou pole zarovnaná na `MAP.ids`; obrysy jsou slovník klíčovaný
+// řetězcem, tak se překlad drží tady na jednom místě.
+const ZIDX = new Map(IDS.map((id, i) => [String(id), i]));
+// Zóny 264/265 ("NV", "Outside of NYC") obrys nemají a mít nebudou: nejsou to místa,
+// ale zbytkové kódy. Jejich jízdy se do mapy nevejdou, tak ať to stránka řekne.
+const OFF_MAP = IDS.map((id, i) => i).filter((i) => !(String(IDS[i]) in MAP.paths));
+
+const SUMS = ["trips", "revenue", "refunds", "dist_obs", "dist_sum", "dur_obs", "dur_sum", "fare_obs", "fare_sum"];
+const zeroAgg = () => ({ trips: 0, revenue: 0, refunds: 0, dist_obs: 0, dist_sum: 0, dur_obs: 0, dur_sum: 0, fare_obs: 0, fare_sum: 0 });
+const addRow = (a, cols, i) => { for (const k of SUMS) a[k] += cols[k][i]; return a; };
+const addAgg = (a, b) => { for (const k of SUMS) a[k] += b[k]; return a; };
+const rowAgg = (cols, i) => addRow(zeroAgg(), cols, i);
+
+// Řezy se počítají jednou a drží: přepnutí metriky nesmí znamenat, že se 261 zón sčítá
+// znovu. Měsíců je pár desítek, takže cache může být prostě mapa a nic se z ní nezahazuje.
+const CACHE = new Map();
+const memo = (key, make) => (CACHE.has(key) ? CACHE.get(key) : (CACHE.set(key, make()), CACHE.get(key)));
+
+const zoneAggs = (m) => memo("z:" + m.key, () => IDS.map((_, i) => rowAgg(m.zones, i)));
+const dayAggs = (m) => memo("d:" + m.key, () => m.daily.date.map((_, i) => rowAgg(m.daily, i)));
+const monthAgg = (m) => memo("m:" + m.key, () => zoneAggs(m).reduce(addAgg, zeroAgg()));
+const HISTORY = MONTHS.map(monthAgg).reduce(addAgg, zeroAgg());
+const TOTAL_DAYS = MONTHS.reduce((a, m) => a + m.daily.date.length, 0);
+
+/* ---------- metriky ---------- */
+
+/* Tři skupiny, protože každá stojí na jiném jmenovateli a čte se jinak: součet za řez
+   (obarví se prostě to, kde je nejvíc provozu), průměr na jízdu, a poměr dvou průměrů.
+   Poslední skupina je odvozená -- rychlost ani cena za míli v curated jako sloupec není
+   a nemůže být: průměr podílů se ze součtů dostat nedá. Proto je to podíl průměrů
+   a `about` to u každé takové metriky říká nahlas.
+
+   `value` vrací null, ne NaN, když není čím dělit: stránka má pro "nevíme" vlastní stav
+   a nesmí propadnout do některého ze dvou zbylých.
+   `obs` je jmenovatel, na kterém metrika stojí -- podle něj se pozná, kdy je průměr
+   postavený na hrstce jízd, a u poměru dvou průměrů je to ten slabší z obou. */
+
+const div = (n, d, s = 1) => (d > 0 ? (n / d) * s : null);
+const avgDist = (a) => div(a.dist_sum, a.dist_obs);
+const avgDur = (a) => div(a.dur_sum, a.dur_obs);
+const avgFare = (a) => div(a.fare_sum, a.fare_obs);
+const net = (a) => a.revenue + a.refunds;
+
+const METRICS = {
+  trips: {
+    group: "totals",
+    additive: true,
+    label: "Zveřejněné jízdy",
+    peak: "Nejvytíženější nástup",
+    about: "Počet jízd přiřazených k zóně, ve které se nastupovalo. Jediná metrika, u které je jmenovatel i čitatel totéž -- nic se nedělí, nic se neodhaduje.",
+    value: (a) => a.trips,
+    obs: () => null,
+    full: (v) => nf.format(v) + " jízd",
+    brief: (v) => nf.format(v) + " jízd",
+    short: (v) => (v >= 1e6 ? nf1.format(v / 1e6) + " mil." : v >= 1e3 ? Math.round(v / 1e3) + " tis." : nf.format(v)),
+  },
+  revenue: {
+    group: "totals",
+    additive: true,
+    label: "Tržby",
+    peak: "Nejvýdělečnější zóna",
+    about: "<code>total_amount</code> zveřejněných jízd — včetně spropitného, mýtného a příplatků — minus storna. Hrubá částka i objem storen zůstávají v curated jako vlastní sloupce; tady se ukazuje to, co doopravdy přiteklo.",
+    value: net,
+    obs: () => null,
+    full: (v) => usd(v),
+    brief: usdCompact,
+    short: usdCompact,
+  },
+  revenue_per_trip: {
+    group: "means",
+    label: "Tržba / jízdu",
+    peak: "Nejdražší jízda",
+    about: "Čisté tržby dělené počtem jízd. Každý zveřejněný řádek má celkovou částku, takže tenhle jmenovatel je přesný — na rozdíl od průměrů pod ním, které stojí jen na řádcích s použitelnou hodnotou. Čitatel je po odečtení storen, jmenovatel je bez nich: storno není jízda.",
+    value: (a) => div(net(a), a.trips),
+    obs: (a) => a.trips,
+    full: (v) => "$" + nf2.format(v),
+    short: (v) => "$" + nf1.format(v),
+  },
+  avg_fare_usd: {
+    group: "means",
+    label: "Průměrné jízdné",
+    peak: "Nejvyšší jízdné",
+    about: "Jen <code>fare_amount</code>: jízdné z taxametru, bez spropitného, mýtného a příplatků. Všude nižší než tržba na jízdu — a zajímavý je právě ten rozdíl.",
+    value: avgFare,
+    obs: (a) => a.fare_obs,
+    full: (v) => "$" + nf2.format(v),
+    // Ne na celé dolary: v jednom měsíci se šest pásem legendy vejde do pár dolarů
+    // a zaokrouhlení by z nich udělalo dvakrát "$15".
+    short: (v) => "$" + nf1.format(v),
+  },
+  avg_distance_mi: {
+    group: "means",
+    label: "Průměrná vzdálenost",
+    peak: "Nejdelší jízdy",
+    median: "median_dist",
+    about: "Míle na jízdu. Průměr táhne nahoru hrstka obřích řádků — tabulka dole na stránce ho staví vedle mediánu.",
+    value: avgDist,
+    obs: (a) => a.dist_obs,
+    full: (v) => nf2.format(v) + " mi",
+    short: (v) => nf1.format(v),
+  },
+  avg_duration_min: {
+    group: "means",
+    label: "Průměrná doba jízdy",
+    peak: "Nejdelší čas v autě",
+    median: "median_dur",
+    about: "Minuty na jízdu, od nástupu po výstup. Nekladné doby jízdy vynuluje pravidlo kvality, takže tenhle průměr netáhnou dolů.",
+    value: avgDur,
+    obs: (a) => a.dur_obs,
+    full: (v) => nf1.format(v) + " min",
+    short: (v) => nf1.format(v),
+  },
+  speed_mph: {
+    group: "ratios",
+    label: "Odvozená rychlost",
+    peak: "Nejrychlejší zóna",
+    median: "median_dur",
+    about: "Průměrná vzdálenost dělená průměrnou dobou jízdy — podíl dvou průměrů, ne průměr rychlostí jednotlivých jízd, a každý z nich stojí na jiné množině řádků. Tam, kde je pokrytí vzdálenosti hluboko pod pokrytím doby jízdy, je výsledek spíš artefaktem toho rozdílu než rychlostí; proto bublina nese obě čísla.",
+    value: (a) => (a.dist_obs > 0 && a.dur_sum > 0 ? div(avgDist(a), avgDur(a), 60) : null),
+    obs: (a) => Math.min(a.dist_obs, a.dur_obs),
+    full: (v) => nf1.format(v) + " mph",
+    short: (v) => nf1.format(v),
+  },
+  fare_per_mile: {
+    group: "ratios",
+    label: "Jízdné / míli",
+    peak: "Nejdražší míle",
+    median: "median_dist",
+    about: "Průměrné jízdné dělené průměrnou vzdáleností. Vysoké tam, kde jsou jízdy krátké a popojíždí se, nízké na dlouhých tazích — taxametr účtuje čas stejně jako vzdálenost.",
+    value: (a) => (a.fare_obs > 0 && a.dist_sum > 0 ? div(avgFare(a), avgDist(a)) : null),
+    obs: (a) => Math.min(a.fare_obs, a.dist_obs),
+    full: (v) => "$" + nf2.format(v) + " / mi",
+    short: (v) => "$" + nf1.format(v),
+  },
+};
+
+let metric = "trips";
+const SPEC = () => METRICS[metric];
+
+/* Průměr z hrstky jízd není průměr. Zóna se šesti jízdami za měsíc dá "rychlost" 65 mph
+   a v žebříčku i na mapě by přebila celé letiště -- není to nález, je to šum vydávaný
+   za nález.
+
+   Práh je proto jeden pro celou stránku: aspoň 0,1 % jízd toho měsíce. Relativní, aby se
+   v kratším měsíci posunul s ním, a měří se na jmenovateli té konkrétní metriky, ne na
+   počtu jízd -- zóna může mít jízd dost a měření vzdálenosti skoro žádné. Součty žádný
+   práh nemají: sto jízd je sto jízd, na tom není co odhadovat. */
+const FLOOR_SHARE = 0.001;
+const floorOf = (m) => Math.round(monthAgg(m).trips * FLOOR_SHARE);
+const solid = (a, floor) => {
+  if (SPEC().additive) return a.trips > 0;
+  const v = SPEC().value(a);
+  return v != null && isFinite(v) && SPEC().obs(a) >= floor;
+};
+
+/* ---------- popisky ---------- */
+
+// Čeština skloňuje, takže měsíc potřebuje dva tvary: "leden 2025" do nadpisu a
+// "v lednu 2025" do věty. Zkratka z `common.js` ("led 2025") zůstává na osy grafů, kde
+// je málo místa.
+const MONTH_FULL = ["Leden", "Únor", "Březen", "Duben", "Květen", "Červen", "Červenec", "Srpen", "Září", "Říjen", "Listopad", "Prosinec"];
+const MONTH_IN = ["lednu", "únoru", "březnu", "dubnu", "květnu", "červnu", "červenci", "srpnu", "září", "říjnu", "listopadu", "prosinci"];
+const longLabel = (m) => MONTH_FULL[m.month - 1] + " " + m.year;
+const lowerLabel = (m) => MONTH_FULL[m.month - 1].toLowerCase() + " " + m.year;
+const inLabel = (m) => "v " + MONTH_IN[m.month - 1] + " " + m.year;
+const fmt = (v, how = "full") => (v == null || !isFinite(v) ? "—" : (SPEC()[how] || SPEC().full)(v));
+// Součty jsou dlouhá čísla a čtou se zkráceně ("3,4 mil. jízd"); průměry jsou krátká
+// a zkrácení by z nich ubralo přesnost i jednotku ("$18" místo "$18,04").
+const disp = (v) => fmt(v, SPEC().additive ? "short" : "full");
+// Pokrytí je podíl jízd, na kterých se metrika vůbec dala změřit. U součtů je to
+// pojem bez obsahu -- nic se nedělí -- a dlaždice na to má vlastní větev.
+const coverageOf = (a) => (SPEC().additive || !a.trips ? null : SPEC().obs(a) / a.trips);
+
+/* ---------- graf: měsíc po měsíci ---------- */
+
+/* Sloupce od nuly u součtů, čára u průměrů. Nula je smysluplná základna pro počet jízd
+   a plocha pod ní něco znamená; u průměrné rychlosti by osa od nuly stlačila celý
+   rozptyl mezi měsíci do dvou pixelů a graf by tvrdil, že se nic neděje. Čára proto osu
+   od nuly nedrží a popisek pod grafem to říká. */
+function yDomain(values, additive) {
+  const known = values.filter((v) => v != null && isFinite(v));
+  const max = Math.max(...known);
+  if (additive) return [0, max * 1.08];
+  const min = Math.min(...known);
+  const pad = Math.max((max - min) * 0.25, max * 0.02) || 1;
+  return [Math.max(0, min - pad), max + pad];
+}
+
+// Čára se láme jen přes body, které se opravdu daly spočítat. Řez bez jediného měření
+// je za měsíc i za den nepravděpodobný, ale `null` v `d` atributu by rozbil celý path,
+// ne jeden bod -- a graf by zmizel beze slova.
+const points = (values) => values.map((v, i) => ({ v, i })).filter((p) => p.v != null && isFinite(p.v));
+const polyline = (pts, x, y) => pts.map((p, k) => `${k ? "L" : "M"}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+
+function axisTicks(svg, L, pw, y, lo, hi, steps, format) {
+  for (let t = 0; t <= steps; t++) {
+    const v = lo + ((hi - lo) / steps) * t;
+    svg.appendChild(el("line", { x1: L, x2: L + pw, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 1 }));
+    svg.appendChild(el("text", { x: L - 9, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, format(v)));
+  }
+}
 
 function drawHistory(host) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
+  const spec = SPEC();
   const H = 172;
-  const { svg, width } = svgRoot(host, H, "Zveřejněné jízdy podle zdrojového měsíce za celý dataset");
-  const L = 46, R = 8, T = 14, B = 36;
+  const { svg, width } = svgRoot(host, H, spec.label + " po zdrojových měsících za celý dataset");
+  const L = 52, R = 8, T = 14, B = 36;
   const pw = width - L - R;
   const ph = H - T - B;
-  const max = Math.max(...MONTHS.map((m) => m.trips));
-  const top = max * 1.08;
+  const values = MONTHS.map((m) => spec.value(monthAgg(m)));
+  const [lo, hi] = yDomain(values, spec.additive);
   const slot = pw / MONTHS.length;
   const bw = Math.max(2, Math.min(26, slot - 3));
-  const y = (v) => T + ph - (v / top) * ph;
+  const y = (v) => T + ph - ((v - lo) / (hi - lo)) * ph;
+  const cx = (i) => L + i * slot + slot / 2;
   const tip = tipFor(host);
+  tip.hidden = true;
 
-  for (let t = 0; t <= 3; t++) {
-    const v = (top / 3) * t;
-    svg.appendChild(el("line", { x1: L, x2: L + pw, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 1 }));
-    svg.appendChild(el("text", { x: L - 9, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, t === 0 ? "0" : nf1.format(v / 1e6) + " mil."));
+  axisTicks(svg, L, pw, y, lo, hi, 3, (v) => (spec.additive && v === 0 ? "0" : spec.short(v)));
+
+  if (!spec.additive) {
+    svg.appendChild(el("path", { d: polyline(points(values), cx, y), fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round" }));
   }
 
   const every = Math.max(1, Math.ceil(MONTHS.length / Math.max(2, Math.floor(pw / 56))));
 
   MONTHS.forEach((m, i) => {
-    const x = L + i * slot + (slot - bw) / 2;
+    const v = values[i];
     const on = m.key === current;
     // Výběr je stav UI, ne kategorie dat: týž odstín, jen ztlumený.
-    svg.appendChild(el("path", {
-      d: barPathUp(x, y(m.trips), bw, ph - (y(m.trips) - T), 3),
-      fill: "var(--s1)",
-      opacity: on ? 1 : 0.32,
-    }));
+    if (v != null && isFinite(v)) {
+      const x = L + i * slot + (slot - bw) / 2;
+      svg.appendChild(spec.additive
+        ? el("path", { d: barPathUp(x, y(v), bw, ph - (y(v) - T), 3), fill: "var(--s1)", opacity: on ? 1 : 0.32 })
+        : el("circle", { cx: cx(i), cy: y(v), r: on ? 5 : 3, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": on ? 2 : 0, opacity: on ? 1 : 0.55 }));
+    }
     if (on) svg.appendChild(el("rect", { x: L + i * slot, y: T + ph + 3, width: slot, height: 2, fill: "var(--accent)" }));
     if (i % every === 0) {
-      svg.appendChild(el("text", { x: x + bw / 2, y: H - 12, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10, "text-anchor": "middle" }, m.key));
+      svg.appendChild(el("text", { x: cx(i), y: H - 12, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10, "text-anchor": "middle" }, m.key));
     }
 
+    const a = monthAgg(m);
     const hit = el("rect", { x: L + i * slot, y: T, width: slot, height: ph, fill: "transparent", style: "cursor:pointer", role: "button", tabindex: 0 });
-    hit.appendChild(el("title", {}, label(m) + ": " + nf.format(m.trips) + " jízd"));
+    hit.appendChild(el("title", {}, label(m) + ": " + fmt(v)));
     hit.addEventListener("mousemove", () => {
-      tip.innerHTML = `<b>${label(m)}</b><br>${nf.format(m.trips)} jízd<br>`
-        + `<span class="r">tržby ${usdM(m.net_revenue)} po stornech</span>`;
-      placeTip(tip, host, ((L + i * slot + slot / 2) / width) * host.clientWidth, Math.max(0, ((y(m.trips) - 4) / H) * host.clientHeight - 64));
+      tip.innerHTML = `<b>${label(m)}</b><br>${fmt(v)}<br>`
+        + `<span class="r">${nf.format(a.trips)} jízd · ${usdCompact(net(a))} tržeb</span>`;
+      placeTip(tip, host, (cx(i) / width) * host.clientWidth, Math.max(0, ((y(v) - 4) / H) * host.clientHeight - 64));
     });
     hit.addEventListener("mouseleave", () => { tip.hidden = true; });
     hit.addEventListener("click", () => select(m.key));
@@ -59,52 +278,56 @@ function drawHistory(host) {
 
 function drawDaily(host, m) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
-  const days = m.daily;
+  const spec = SPEC();
+  const days = dayAggs(m);
+  const dates = m.daily.date;
   const H = 250;
-  const { svg, width } = svgRoot(host, H, "Jízdy po dnech za " + label(m));
-  const L = 54, R = 14, T = 18, B = 30;
+  const { svg, width } = svgRoot(host, H, spec.label + " po dnech za " + label(m));
+  const L = 58, R = 14, T = 18, B = 30;
   const pw = width - L - R;
   const ph = H - T - B;
-  const max = Math.max(...days.map((d) => d.trips));
-  const top = max * 1.1;
+  const values = days.map(spec.value);
+  const [lo, hi] = yDomain(values, spec.additive);
   const x = (i) => L + (days.length === 1 ? pw / 2 : (i / (days.length - 1)) * pw);
-  const y = (v) => T + ph - (v / top) * ph;
+  const y = (v) => T + ph - ((v - lo) / (hi - lo)) * ph;
   const step = pw / Math.max(1, days.length - 1);
 
-  days.forEach((d, i) => {
-    if (!isWeekend(d.date)) return;
+  dates.forEach((date, i) => {
+    if (!isWeekend(date)) return;
     const x0 = Math.max(L, x(i) - step / 2);
     const x1 = Math.min(L + pw, x(i) + step / 2);
     svg.appendChild(el("rect", { x: x0, y: T, width: x1 - x0, height: ph, fill: "var(--band)" }));
   });
 
-  for (let t = 0; t <= 4; t++) {
-    const v = (top / 4) * t;
-    svg.appendChild(el("line", { x1: L, x2: L + pw, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 1 }));
-    svg.appendChild(el("text", { x: L - 10, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, t === 0 ? "0" : nf.format(Math.round(v / 1000)) + " tis."));
-  }
+  axisTicks(svg, L, pw, y, lo, hi, 4, (v) => (spec.additive && v === 0 ? "0" : spec.short(v)));
 
-  const line = days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d.trips).toFixed(1)}`).join(" ");
-  svg.appendChild(el("path", { d: `${line} L${x(days.length - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`, fill: "var(--s2-soft)" }));
+  const pts = points(values);
+  const line = polyline(pts, x, y);
+  // Plocha pod křivkou má význam jen tam, kde má význam nula: součet přes dny je zase
+  // součet, průměr přes dny není nic.
+  if (spec.additive) {
+    svg.appendChild(el("path", { d: `${line} L${x(pts[pts.length - 1].i).toFixed(1)},${y(lo)} L${x(pts[0].i).toFixed(1)},${y(lo)} Z`, fill: "var(--s2-soft)" }));
+  }
   svg.appendChild(el("path", { d: line, fill: "none", stroke: "var(--s2)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
 
   const every = Math.max(2, Math.ceil(days.length / Math.max(2, Math.floor(pw / 64))));
-  days.forEach((d, i) => {
+  dates.forEach((date, i) => {
     if (i % every !== 0 || i > days.length - 2) return;
-    svg.appendChild(el("text", { x: x(i), y: H - 9, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "middle" }, dayLabel(d.date)));
+    svg.appendChild(el("text", { x: x(i), y: H - 9, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "middle" }, dayLabel(date)));
   });
 
   // Popiskem se označí jen vrchol; číslo u každého bodu si nikdo nepřečte.
-  const peak = days.reduce((a, b, i) => (b.trips > days[a].trips ? i : a), 0);
-  svg.appendChild(el("circle", { cx: x(peak), cy: y(days[peak].trips), r: 5, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2 }));
+  const peak = pts.reduce((best, p) => (p.v > values[best] ? p.i : best), pts[0].i);
+  svg.appendChild(el("circle", { cx: x(peak), cy: y(values[peak]), r: 5, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2 }));
   const anchor = peak > days.length - 5 ? "end" : peak < 4 ? "start" : "middle";
-  svg.appendChild(el("text", { x: x(peak), y: y(days[peak].trips) - 12, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 11, "font-weight": 600, "text-anchor": anchor }, nf.format(days[peak].trips)));
+  svg.appendChild(el("text", { x: x(peak), y: y(values[peak]) - 12, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 11, "font-weight": 600, "text-anchor": anchor }, fmt(values[peak], "short")));
 
   const cross = el("line", { x1: 0, x2: 0, y1: T, y2: T + ph, stroke: "var(--rule-strong)", "stroke-width": 1, opacity: 0 });
   const knob = el("circle", { r: 5, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2, opacity: 0 });
   svg.append(cross, knob);
 
   const tip = tipFor(host);
+  tip.hidden = true;
   const hit = el("rect", { x: L, y: T, width: pw, height: ph, fill: "transparent" });
   svg.appendChild(hit);
 
@@ -112,12 +335,12 @@ function drawDaily(host, m) {
     const box = svg.getBoundingClientRect();
     const px = ((ev.clientX - box.left) / box.width) * width;
     const i = Math.max(0, Math.min(days.length - 1, Math.round(((px - L) / pw) * (days.length - 1))));
-    const d = days[i];
+    const a = days[i];
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
-    knob.setAttribute("cx", x(i)); knob.setAttribute("cy", y(d.trips)); knob.setAttribute("opacity", 1);
-    tip.innerHTML = `<b>${dayLabel(d.date)}</b>${isWeekend(d.date) ? " <span class='r'>víkend</span>" : ""}<br>`
-      + `${nf.format(d.trips)} jízd<br><span class="r">tržby ${usd(d.net_revenue)}<br>hrubě ${usd(d.revenue)} · storna ${usd(d.refunds)}</span>`;
-    placeTip(tip, host, (x(i) / width) * host.clientWidth, Math.max(4, (y(d.trips) / H) * host.clientHeight - 84));
+    knob.setAttribute("cx", x(i)); knob.setAttribute("cy", y(values[i])); knob.setAttribute("opacity", 1);
+    tip.innerHTML = `<b>${dayLabel(dates[i])}</b>${isWeekend(dates[i]) ? " <span class='r'>víkend</span>" : ""}<br>`
+      + `${fmt(values[i])}<br><span class="r">${nf.format(a.trips)} jízd · tržby ${usdCompact(net(a))}</span>`;
+    placeTip(tip, host, (x(i) / width) * host.clientWidth, Math.max(4, (y(values[i]) / H) * host.clientHeight - 84));
   });
 
   hit.addEventListener("mouseleave", () => {
@@ -127,93 +350,12 @@ function drawDaily(host, m) {
   });
 
   host.appendChild(svg);
-  buildDailyTable(m);
+  buildDailyTable(m, days, values);
 }
 
 /* ---------- mapa: zóny nástupu ---------- */
 
-// Součty jdou sečíst, průměry ne -- vážený průměr přes zóny je v payloadu už spočítaný,
-// tady se jen vybírá sloupec a formátuje.
-//
-// Tři skupiny, protože každá stojí na jiném jmenovateli a čte se jinak: součet za zónu
-// (obarví se prostě to, kde je nejvíc provozu), průměr na jízdu, a poměr dvou průměrů.
-// Poslední skupina je odvozená -- rychlost ani cena za míli v curated jako sloupec není
-// a nemůže být: průměr podílů se z předpočítaného průměru nedá dostat zpátky. Proto je
-// to podíl průměrů a `about` to u každé takové metriky říká nahlas.
-// Jmenovatel nula nebo chybějící čitatel dá null, ne NaN: mapa má tři stavy a "nevíme"
-// nesmí propadnout do některého z těch dvou zbylých.
-const ratio = (num, den, scale = 1) => (num != null && den ? (num / den) * scale : null);
-
-const METRICS = {
-  trips: {
-    group: "totals",
-    label: "Zveřejněné jízdy",
-    about: "Jízdy přiřazené k zóně nástupu, sečtené přes celou historii.",
-    of: (z) => z.trips,
-    full: (v) => nf.format(v) + " jízd",
-    short: (v) => (v >= 1e6 ? nf1.format(v / 1e6) + " mil." : v >= 1e3 ? Math.round(v / 1e3) + " tis." : nf.format(v)),
-  },
-  revenue: {
-    group: "totals",
-    label: "Tržby",
-    about: "<code>total_amount</code> zveřejněných jízd — včetně spropitného, mýtného a příplatků — minus storna. Hrubá částka i objem storen zůstávají v curated jako vlastní sloupce; tady se ukazuje to, co doopravdy přiteklo.",
-    of: (z) => z.net_revenue,
-    full: (v) => usd(v),
-    brief: usdCompact,
-    short: usdCompact,
-  },
-  revenue_per_trip: {
-    group: "means",
-    label: "Tržba / jízdu",
-    about: "Čisté tržby dělené počtem jízd. Každý zveřejněný řádek má celkovou částku, takže tenhle jmenovatel je přesný — na rozdíl od průměrů pod ním, které stojí jen na řádcích s použitelnou hodnotou. Čitatel je po odečtení storen, jmenovatel je bez nich: storno není jízda.",
-    of: (z) => ratio(z.net_revenue, z.trips),
-    full: (v) => "$" + nf2.format(v),
-    short: (v) => "$" + nf1.format(v),
-  },
-  avg_fare_usd: {
-    group: "means",
-    label: "Průměrné jízdné",
-    about: "Jen <code>fare_amount</code>: jízdné z taxametru, bez spropitného, mýtného a příplatků. Všude nižší než tržba na jízdu — a zajímavý je právě ten rozdíl.",
-    of: (z) => z.avg_fare_usd,
-    full: (v) => "$" + nf2.format(v),
-    short: (v) => "$" + Math.round(v),
-  },
-  avg_distance_mi: {
-    group: "means",
-    label: "Průměrná vzdálenost",
-    about: "Míle na jízdu. Průměr táhne nahoru hrstka obřích řádků — tabulka dole na stránce ho staví vedle mediánu.",
-    of: (z) => z.avg_distance_mi,
-    full: (v) => nf2.format(v) + " mi",
-    short: (v) => nf1.format(v),
-  },
-  avg_duration_min: {
-    group: "means",
-    label: "Průměrná doba jízdy",
-    about: "Minuty na jízdu, od nástupu po výstup. Nekladné doby jízdy vynuluje pravidlo kvality, takže tenhle průměr netáhnou dolů.",
-    of: (z) => z.avg_duration_min,
-    full: (v) => nf1.format(v) + " min",
-    short: (v) => nf1.format(v),
-  },
-  speed_mph: {
-    group: "ratios",
-    label: "Odvozená rychlost",
-    about: "Průměrná vzdálenost dělená průměrnou dobou jízdy — podíl dvou průměrů, ne průměr rychlostí jednotlivých jízd, a každý z nich stojí na jiné množině řádků. Tam, kde je pokrytí vzdálenosti hluboko pod pokrytím doby jízdy, je výsledek spíš artefaktem toho rozdílu než rychlostí; proto bublina nese obě čísla.",
-    of: (z) => ratio(z.avg_distance_mi, z.avg_duration_min, 60),
-    full: (v) => nf1.format(v) + " mph",
-    short: (v) => nf1.format(v),
-  },
-  fare_per_mile: {
-    group: "ratios",
-    label: "Jízdné / míli",
-    about: "Průměrné jízdné dělené průměrnou vzdáleností. Vysoké tam, kde jsou jízdy krátké a popojíždí se, nízké na dlouhých tazích — taxametr účtuje čas stejně jako vzdálenost.",
-    of: (z) => ratio(z.avg_fare_usd, z.avg_distance_mi),
-    full: (v) => "$" + nf2.format(v) + " / mi",
-    short: (v) => "$" + nf1.format(v),
-  },
-};
-
 const BUCKETS = 6;
-let metric = "trips";
 
 // Kvantily, ne stejně široká pásma. Jízdy jsou rozdělené tak, že Midtown je řádově nad
 // zbytkem -- lineární pásma by obarvila celé město nejsvětlejším odstínem a mapa by
@@ -227,9 +369,10 @@ function quantileEdges(values, n) {
 
 const bucketOf = (v, edges) => edges.reduce((acc, e) => acc + (v >= e ? 1 : 0), 0);
 
-function drawMap(host) {
-  const M = DATA.map;
-  const spec = METRICS[metric];
+function drawMap(host, m) {
+  const spec = SPEC();
+  const aggs = zoneAggs(m);
+  const floor = floorOf(m);
   host.querySelectorAll("svg").forEach((n) => n.remove());
 
   // Rampa se mění po skupinách, ne po metrikách: odstín nese "čteš součet / průměr na
@@ -238,18 +381,20 @@ function drawMap(host) {
   // Sada `--m1..--m6` je pořád sekvenční, jednoodstínová -- mění se jen který odstín.
   document.documentElement.dataset.ramp = spec.group;
 
-  const stats = new Map(M.zones.map((z) => [String(z.location_id), z]));
-  const values = Object.keys(M.paths)
-    .map((id) => stats.get(id))
-    .filter((z) => z && spec.of(z) != null && isFinite(spec.of(z)))
-    .map(spec.of);
-  const edges = quantileEdges(values, BUCKETS);
-  const lows = [Math.min(...values), ...edges];
+  // Pásma se počítají jen z hodnot, které něco znamenají. Kdyby do kvantilů spadly i
+  // zóny pod prahem, určovaly by hranice barev čísla, kterým sama stránka nevěří.
+  const shown = new Map();
+  for (const [id] of Object.entries(MAP.paths)) {
+    const i = ZIDX.get(id);
+    if (i !== undefined && solid(aggs[i], floor)) shown.set(id, spec.value(aggs[i]));
+  }
+  const edges = quantileEdges([...shown.values()], BUCKETS);
+  const lows = [Math.min(...shown.values()), ...edges];
 
   const svg = el("svg", {
-    viewBox: `0 0 ${M.width} ${M.height}`,
+    viewBox: `0 0 ${MAP.width} ${MAP.height}`,
     role: "img",
-    "aria-label": spec.label + " podle zóny nástupu za celou historii",
+    "aria-label": spec.label + " podle zóny nástupu za " + label(m),
   });
   // Bublina přežívá překreslení (visí na hostu, ne na SVG), takže po přepnutí metriky
   // je jinak vidět dál -- s čísly, co jsou napůl z předchozího pohledu.
@@ -259,45 +404,50 @@ function drawMap(host) {
   // takže obrys zóny kreslené dřív by zmizel pod jejími sousedy.
   const highlight = el("path", { class: "hl", d: "" });
 
-  for (const [id, d] of Object.entries(M.paths)) {
-    const z = stats.get(id);
-    const value = z ? spec.of(z) : null;
-    const known = value != null && isFinite(value);
+  for (const [id, d] of Object.entries(MAP.paths)) {
+    const i = ZIDX.get(id);
+    const a = i === undefined ? null : aggs[i];
+    const known = shown.has(id);
     // Jméno z curated (tam ho pipeline joinovala z lookupu), a když zóna v curated
     // není, tak aspoň jméno ze shapefilu.
-    const named = z ? [z.zone, z.borough] : M.names[id] || ["zóna " + id, ""];
+    const named = i === undefined ? MAP.names[id] || ["zóna " + id, ""] : [MAP.zone[i], MAP.borough[i]];
 
-    // Tři různé stavy, ne dva: zóna bez řádku v curated, zóna s jízdami ale bez
-    // pozorování, ze kterého by šel průměr spočítat, a zóna s číslem.
-    const missing = z ? "metrika \u201e" + spec.label.toLowerCase() + "\u201c není zaznamenaná" : "v datech žádné jízdy";
+    // Tři různé stavy, ne dva: v tomhle měsíci žádná jízda, jízdy ale málo měření na
+    // to, aby průměr něco znamenal, a číslo. Prostřední stav je jediný, který přibyl
+    // tím, že mapa přestala ukazovat celou historii -- za 29 měsíců se hrstka jízd
+    // nasčítá skoro všude, za jeden měsíc ne.
+    const missing = !a || !a.trips
+      ? "v tomhle měsíci žádné jízdy"
+      : "málo jízd na průměr (" + nf.format(spec.obs(a) || 0) + " z " + nf.format(floor) + ")";
+
     // Bublina nese celý profil zóny, ne jen obarvenou metriku, a tučně je v něm to, čím
     // je zrovna obarveno. Přepínač tak nemění, co se dá přečíst -- jen kam se dívat.
     const cell = (key) => {
       const s = METRICS[key];
-      const v = z ? s.of(z) : null;
+      const v = a ? s.value(a) : null;
       const text = v == null || !isFinite(v) ? "—" : (s.brief || s.full)(v);
       return key === metric ? `<b>${text}</b>` : text;
     };
-    const shape = el("path", { d, fill: known ? `var(--m${bucketOf(value, edges) + 1})` : "var(--m0)" });
-    shape.appendChild(el("title", {}, named[0] + ": " + (known ? spec.full(value) : missing)));
+    const shape = el("path", { d, fill: known ? `var(--m${bucketOf(shown.get(id), edges) + 1})` : "var(--m0)" });
+    shape.appendChild(el("title", {}, named[0] + ": " + (known ? spec.full(shown.get(id)) : missing)));
 
     // Bez tabindex: 263 zón by znamenalo 263 zastávek tabulátoru mezi grafy. Táž čísla
     // jsou v tabulkách níž, mapa je jejich obrázek.
     shape.addEventListener("mousemove", (event) => {
       highlight.setAttribute("d", d);
       const box = host.getBoundingClientRect();
-      tip.innerHTML = z
+      tip.innerHTML = a
         ? [
             `<b>${named[0]}</b> · ${named[1]}`,
             `${cell("trips")} · ${cell("revenue")}`,
-            `<span class="r">hrubě ${usdCompact(z.revenue)} · storna ${usdCompact(z.refunds)}</span>`,
+            `<span class="r">hrubě ${usdCompact(a.revenue)} · storna ${usdCompact(a.refunds)}</span>`,
             `<span class="r">${cell("revenue_per_trip")} / jízdu · ${cell("avg_fare_usd")} jízdné`
               + ` · ${cell("avg_distance_mi")} · ${cell("avg_duration_min")}</span>`,
             `<span class="r">${cell("speed_mph")} · ${cell("fare_per_mile")}</span>`,
-            `<span class="r">pokrytí ${orDash(z.coverage, pct)} vzdálenost`
-              + ` · ${orDash(z.duration_coverage, pct)} doba jízdy</span>`,
+            `<span class="r">pokrytí ${orDash(div(a.dist_obs, a.trips), pct)} vzdálenost`
+              + ` · ${orDash(div(a.dur_obs, a.trips), pct)} doba jízdy</span>`,
           ].concat(known ? [] : [`<span class="r">${missing}</span>`]).join("<br>")
-        : `<b>${named[0]}</b> · ${named[1]}<br><span class="r">${missing}</span>`;
+        : `<b>${named[0]}</b> · ${named[1]}<br><span class="r">v datech žádné jízdy</span>`;
       placeTip(tip, host, event.clientX - box.left, event.clientY - box.top - 104);
     });
     svg.appendChild(shape);
@@ -310,47 +460,173 @@ function drawMap(host) {
   });
   host.appendChild(svg);
 
+  const grey = spec.additive ? "žádná jízda v tomhle měsíci" : "žádné jízdy nebo málo měření";
   document.getElementById("map-legend").innerHTML =
     `<div><div class="steps">${lows.map((_, i) => `<i style="background:var(--m${i + 1})"></i>`).join("")}</div>`
     + `<div class="edges">${lows.map((v) => `<span>${spec.short(v)}</span>`).join("")}</div></div>`
-    + `<span class="nodata"><i class="swatch" style="background:var(--m0)"></i>v datech žádné jízdy</span>`;
+    + `<span class="nodata"><i class="swatch" style="background:var(--m0)"></i>${grey}</span>`;
 
-  document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu";
-  document.getElementById("map-about").innerHTML = spec.about;
-  document.querySelectorAll("#metric-picker .mbtn").forEach((btn) => {
-    btn.setAttribute("aria-pressed", String(btn.dataset.metric === metric));
-  });
-
-  const off = M.off_map;
+  const off = OFF_MAP.reduce((sum, i) => sum + aggs[i].trips, 0);
+  const drawn = Object.keys(MAP.paths).length;
   document.getElementById("map-foot").textContent =
-    Object.keys(M.paths).length + " zón · " + SPAN
-    + " (celá historie, ne měsíc vybraný níž) · " + nf.format(off.trips)
-    + " jízd spadá do " + off.zones + " kódů, které na žádné mapě obrys nemají (neznámé, mimo NYC)";
+    (spec.additive
+      ? `${shown.size} z ${drawn} zón má ${inLabel(m)} aspoň jednu jízdu`
+      : `${shown.size} z ${drawn} zón má ${inLabel(m)} dost jízd na průměr`)
+    + " · " + nf.format(off) + " jízd spadá do " + OFF_MAP.length
+    + " kódů, které na žádné mapě obrys nemají (neznámé, mimo NYC)";
 }
 
 /* ---------- tabulky ---------- */
 
-function buildDailyTable(m) {
+function buildDailyTable(m, days, values) {
+  const spec = SPEC();
+  // U součtů by sloupec s metrikou jen zopakoval ten vedle sebe.
+  const own = !spec.additive;
+  const head = ["Den"].concat(own ? [spec.label] : [], ["Jízdy", "Tržby", "Storna"]);
   document.getElementById("daily-table").innerHTML =
-    "<thead><tr><th>Den</th><th class='num'>Jízdy</th><th class='num'>Tržby</th><th class='num'>Hrubé</th><th class='num'>Storna</th></tr></thead><tbody>"
-    + m.daily.map((d) =>
-      `<tr><td class="mono">${d.date}${isWeekend(d.date) ? " · víkend" : ""}</td><td class="num">${nf.format(d.trips)}</td><td class="num">${usd(d.net_revenue)}</td><td class="num dim">${usd(d.revenue)}</td><td class="num dim">${usd(d.refunds)}</td></tr>`
-    ).join("") + "</tbody>";
+    "<thead><tr>" + head.map((h, i) => `<th${i ? " class='num'" : ""}>${h}</th>`).join("") + "</tr></thead><tbody>"
+    + m.daily.date.map((date, i) => {
+      const a = days[i];
+      return `<tr><td class="mono">${date}${isWeekend(date) ? " · víkend" : ""}</td>`
+        + (own ? `<td class="num">${fmt(values[i])}</td>` : "")
+        + `<td class="num">${nf.format(a.trips)}</td>`
+        + `<td class="num">${usd(net(a))}</td>`
+        // Znaménko před značku měny, ne za ni: "$-90 459" se čte jako rozbitý formát.
+        + `<td class="num dim">−${usd(-a.refunds)}</td></tr>`;
+    }).join("") + "</tbody>";
 }
 
-function buildZoneTable(m) {
-  document.getElementById("ztable").innerHTML = m.zones.slice(0, 12).map((z) => {
-    const low = z.coverage != null && z.coverage < 0.9;
+/* Průměr vedle mediánu je exponát o kvalitě dat, ne o vybrané metrice: ukazuje, že
+   průměr táhne nahoru hrstka nevěrohodných řádků a medián zůstává na místě. Curated
+   nese medián vzdálenosti i doby jízdy, takže tabulka umí obojí a přepne se podle toho,
+   o čem se zrovna čte; pro jízdné medián neexistuje a zůstane vzdálenost. Řadí se
+   pořád podle jízd -- je to tvrzení o největších zónách, ne žebříček. */
+const MEDIAN_VIEWS = {
+  median_dist: { title: "vzdálenosti", unit: "mi", value: avgDist, obs: (a) => a.dist_obs, fmt: (v) => nf2.format(v) },
+  median_dur: { title: "doby jízdy", unit: "min", value: avgDur, obs: (a) => a.dur_obs, fmt: (v) => nf1.format(v) },
+};
+
+function buildMeanMedian(m) {
+  const key = SPEC().median || "median_dist";
+  const view = MEDIAN_VIEWS[key];
+  const aggs = zoneAggs(m);
+  const rows = IDS.map((_, i) => i).sort((a, b) => aggs[b].trips - aggs[a].trips).slice(0, 12);
+
+  document.getElementById("mm-title").textContent = "Průměr vedle mediánu — " + view.title;
+  document.getElementById("mm-cap").innerHTML =
+    `Dvanáct nejvytíženějších zón ${inLabel(m)}. Hrstka řádků s nevěrohodným měřením táhne`
+    + ` průměrnou hodnotu nahoru; medián zůstává na místě. Pokrytí je podíl jízd, na kterých se`
+    + ` průměr vůbec dal změřit — čtěte průměr s okem na něm. Medián je medián denních mediánů:`
+    + ` sečíst mediány nejde, tak se z nich bere prostřední.`;
+  document.getElementById("mm-head").innerHTML =
+    "<tr><th>Zóna</th><th>Obvod</th><th class='num'>Jízdy</th>"
+    + `<th class='num'>Průměr (${view.unit})</th><th class='num'>Medián (${view.unit})</th>`
+    + "<th class='num'>Pokrytí</th><th class='num'>Prům. jízdné</th></tr>";
+
+  document.getElementById("ztable").innerHTML = rows.map((i) => {
+    const a = aggs[i];
+    const cov = div(view.obs(a), a.trips);
+    const low = cov != null && cov < 0.9;
     return `<tr>
-      <td>${z.zone}</td>
-      <td class="dim">${z.borough}</td>
-      <td class="num">${nf.format(z.trips)}</td>
-      <td class="num">${orDash(z.avg_distance_mi, (v) => nf2.format(v))}</td>
-      <td class="num">${orDash(z.median_distance_mi, (v) => nf2.format(v))}</td>
-      <td class="num" ${low ? 'style="color:var(--s2)"' : ""}>${orDash(z.coverage, (v) => nf1.format(v * 100) + " %")}</td>
-      <td class="num">${orDash(z.avg_fare_usd, (v) => "$" + nf2.format(v))}</td>
+      <td>${MAP.zone[i]}</td>
+      <td class="dim">${MAP.borough[i]}</td>
+      <td class="num">${nf.format(a.trips)}</td>
+      <td class="num">${orDash(view.value(a), view.fmt)}</td>
+      <td class="num">${orDash(m.zones[key][i], view.fmt)}</td>
+      <td class="num" ${low ? 'style="color:var(--s2)"' : ""}>${orDash(cov, (v) => nf1.format(v * 100) + " %")}</td>
+      <td class="num">${orDash(avgFare(a), (v) => "$" + nf2.format(v))}</td>
     </tr>`;
   }).join("");
+}
+
+/* ---------- žebříček zón ---------- */
+
+function drawZones(m) {
+  const spec = SPEC();
+  const aggs = zoneAggs(m);
+  const floor = floorOf(m);
+  const ranked = IDS.map((_, i) => i)
+    .filter((i) => solid(aggs[i], floor))
+    .sort((a, b) => spec.value(aggs[b]) - spec.value(aggs[a]))
+    .slice(0, 10);
+
+  document.getElementById("zones-title").textContent = "Zóny podle: " + spec.label;
+  document.getElementById("zones-cap").textContent = spec.additive
+    ? "Deset nejsilnějších zón nástupu " + inLabel(m) + ", podle zveřejněných jízd."
+    : "Za " + lowerLabel(m) + ", jen zóny s aspoň 0,1 % jízd měsíce (≥ " + nf.format(floor)
+      + ") — průměr z hrstky jízd není průměr a bez prahu by žebříček vyhrála zóna s osmi jízdami.";
+
+  drawBars(document.getElementById("zones"), ranked.map((i) => {
+    const a = aggs[i];
+    return {
+      label: MAP.zone[i],
+      full: MAP.zone[i],
+      value: spec.value(a),
+      display: disp(spec.value(a)),
+      tip: `${fmt(spec.value(a))} · ${MAP.borough[i]}<br>`
+        + `<span class="r">${nf.format(a.trips)} jízd · tržby ${usdCompact(net(a))}</span>`,
+    };
+  }), { labelW: 170, valueW: 92, fill: "var(--s3)", title: spec.label + " podle zóny nástupu" });
+}
+
+/* ---------- dlaždice vybraného měsíce ---------- */
+
+/* Čtyři dlaždice, všechny o vybrané metrice: kolik jí je, jak je to proti celé historii,
+   z čeho to stojí (na den u součtu, pokrytí u průměru) a kde je jí nejvíc.
+
+   Součty se srovnávají na den, ne na měsíc. Únor má o desetinu dní míň než leden, takže
+   měsíční součty by kreslily propad tam, kde je jen kratší kalendář. Průměry žádnou
+   normalizaci nepotřebují -- délka měsíce se v nich vykrátí sama. */
+function buildTilesFor(m) {
+  const spec = SPEC();
+  const a = monthAgg(m);
+  const days = m.daily.date.length;
+  const value = spec.value(a);
+  const aggs = zoneAggs(m);
+  const floor = floorOf(m);
+
+  // Základna je celá historie spočítaná jako jeden řez, ne průměr měsíčních průměrů:
+  // ten by dal každému měsíci stejnou váhu bez ohledu na to, kolik se v něm jezdilo.
+  const base = spec.additive ? spec.value(HISTORY) / TOTAL_DAYS : spec.value(HISTORY);
+  const mine = spec.additive ? value / days : value;
+
+  const best = IDS.map((_, i) => i)
+    .filter((i) => solid(aggs[i], floor))
+    .sort((x, y) => spec.value(aggs[y]) - spec.value(aggs[x]))[0];
+
+  const cover = coverageOf(a);
+  const tiles = [
+    { k: spec.label, v: disp(value), s: "celá historie " + disp(spec.value(HISTORY)) },
+    {
+      k: "Proti celé historii",
+      v: delta(mine, base) || "—",
+      s: spec.additive ? "srovnáno na den, aby krátký únor nebyl propad" : "proti váženému průměru celé historie",
+    },
+    spec.additive
+      ? { k: "Na den", v: disp(value / days), s: plural(days, "den", "dny", "dní") + " v měsíci" }
+      : {
+          k: "Pokrytí",
+          v: orDash(cover, pct),
+          // Tržba na jízdu má jmenovatel, který nic neztrácí -- každý zveřejněný řádek
+          // nese celkovou částku. Sto procent je tam tvrzení, ne shoda náhod.
+          s: cover === 1 ? "jmenovatel je přesný, ne odhadnutý" : "podíl jízd, na kterých se to dalo změřit",
+        },
+    best === undefined
+      ? { k: spec.peak, v: "—", s: "žádná zóna nad prahem", name: true }
+      : {
+          k: spec.peak,
+          v: MAP.zone[best],
+          s: spec.additive
+            ? pct(spec.value(aggs[best]) / value) + " z měsíce · " + disp(spec.value(aggs[best]))
+            : disp(spec.value(aggs[best])) + " · " + nf.format(aggs[best].trips) + " jízd",
+          name: true,
+        },
+  ];
+  buildTiles(tiles);
+
+  document.getElementById("kpis-cap").innerHTML =
+    longLabel(m) + " proti celé historii (" + SPAN + "). Tržby jsou po odečtení storen,"
+    + " kterých bylo " + inLabel(m) + " " + pct(-a.refunds / a.revenue) + " hrubého objemu.";
 }
 
 /* ---------- statické části ---------- */
@@ -361,78 +637,19 @@ function buildHeader() {
   const f = DATA.freshness;
   buildChips([
     { dot: "good", text: plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN },
-    // Součet přes celou historii zůstává, ale jako údaj o rozsahu datasetu; dlaždice níž
-    // patří vybranému měsíci, protože jeden měsíc má tendenci a součet ne.
-    { dot: "info", text: nf1.format(TOTAL_TRIPS / 1e6) + " mil. jízd · " + usdBig(TOTAL_REVENUE) + " jízdného" },
+    { dot: "info", text: nf1.format(HISTORY.trips / 1e6) + " mil. jízd · " + usdBig(net(HISTORY)) + " jízdného" },
     { dot: "good", text: "nejnovější měsíc město zveřejnilo před " + f.source_age_days + " dny (" + f.source_newest + ")" },
     { dot: "info", text: "postaveno " + DATA.generated_at },
   ]);
 
   document.getElementById("foot").textContent =
-    "Postaveno " + DATA.generated_at + " z " + plural(MONTHS.length, "souboru Parquet", "souborů Parquet") + " pokrývajících " + SPAN + ".";
+    "Postaveno " + DATA.generated_at + " z " + plural(MONTHS.length, "souboru Parquet", "souborů Parquet")
+    + " pokrývajících " + SPAN + " · " + plural(IDS.length, "zóna", "zóny", "zón") + " nástupu.";
 }
 
-/* ---------- dlaždice vybraného měsíce ---------- */
-
-/* Dlaždice ukazují jeden měsíc, ne celou historii: součet přes 29 měsíců je pořád stejné
-   číslo a nic neříká o tom, kam to jde. Vedle měsíce proto stojí průměr všech měsíců
-   a odchylka od něj.
-
-   Jízdy a tržby se porovnávají na den, ne na měsíc. Únor má o desetinu dní míň než
-   leden, takže měsíční součty by kreslily propad tam, kde je jen kratší kalendář; a
-   nejnovější měsíc bývá zveřejněný celý, ale kdyby nebyl, projevilo by se totéž.
-   Poměrová čísla (průměrná jízda, podíl zóny) žádnou normalizaci nepotřebují -- délka
-   měsíce se v nich vykrátí sama. */
-
-const TOTAL_TRIPS = MONTHS.reduce((a, m) => a + m.trips, 0);
-const TOTAL_REVENUE = MONTHS.reduce((a, m) => a + m.net_revenue, 0);
-const TOTAL_DAYS = MONTHS.reduce((a, m) => a + m.daily.length, 0);
-const AVG_TRIPS_DAY = TOTAL_TRIPS / TOTAL_DAYS;
-const AVG_REVENUE_DAY = TOTAL_REVENUE / TOTAL_DAYS;
-const AVG_FARE = TOTAL_REVENUE / TOTAL_TRIPS;
-// Podíl zóny za celou historii se bere z mapy -- ta jediná nese všechny zóny přes všechny
-// měsíce, kdežto měsíční `zones` je useknuté na top 25.
-const HIST_SHARE = new Map(DATA.map.zones.map((z) => [z.location_id, z.trips / TOTAL_TRIPS]));
-
-function buildTilesFor(m) {
-  const days = m.daily.length;
-  const tripsDay = m.trips / days;
-  const revenueDay = m.net_revenue / days;
-  const fare = m.net_revenue / m.trips;
-  const busiest = m.zones[0];
-  const share = busiest.trips / m.trips;
-
-  buildTiles([
-    {
-      k: "Jízdy",
-      v: nf1.format(m.trips / 1e6) + " mil.",
-      s: nf.format(Math.round(tripsDay)) + " / den · " + delta(tripsDay, AVG_TRIPS_DAY),
-    },
-    {
-      k: "Zaplacené jízdné",
-      v: usdBig(m.net_revenue),
-      s: usdCompact(revenueDay) + " / den · " + delta(revenueDay, AVG_REVENUE_DAY),
-    },
-    {
-      k: "Průměrná jízda",
-      v: "$" + nf2.format(fare),
-      s: "průměr $" + nf2.format(AVG_FARE) + " · " + delta(fare, AVG_FARE),
-    },
-    {
-      k: "Nejvytíženější nástup",
-      v: busiest.zone,
-      s: pct(share) + " z měsíce · " + delta(share, HIST_SHARE.get(busiest.location_id)),
-      name: true,
-    },
-  ]);
-
-  document.getElementById("kpis-cap").innerHTML =
-    label(m) + " proti průměru " + plural(MONTHS.length, "měsíce", "měsíců", "měsíců")
-    + " (" + SPAN + "). Jízdy a tržby se srovnávají na den, aby krátký únor nevypadal jako"
-    + " propad; tržby jsou po odečtení storen, kterých v tomhle měsíci bylo "
-    + pct(-m.refunds / (m.net_revenue - m.refunds)) + " objemu.";
-}
-
+/* Přepínač metriky: viditelná řada, ne `select`. Osm možností se do řady vejde a je na
+   první pohled vidět, že se stránka dá přepnout -- rozbalovátko to netvrdí. Skupiny
+   odděluje mezera: součty, průměry na jízdu, poměry mezi průměry. */
 function buildMetricPicker() {
   const host = document.getElementById("metric-picker");
   let group = null;
@@ -445,41 +662,49 @@ function buildMetricPicker() {
   host.querySelectorAll(".mbtn").forEach((btn) => {
     btn.addEventListener("click", () => {
       metric = btn.dataset.metric;
-      drawMap(document.getElementById("zonemap"));
+      render();
     });
   });
 }
 
 /* ---------- render ---------- */
 
+// Překresluje se všechno včetně mapy: měsíc i metrika s ní hýbou a 261 cest je levnější
+// než dvě cesty kódu, které se mají udržet v souladu.
 function render() {
   const m = month();
+  const spec = SPEC();
   syncPicker();
+  document.querySelectorAll("#metric-picker .mbtn").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.metric === metric));
+  });
+
+  document.getElementById("view-title").textContent = spec.label + " · " + longLabel(m);
+  document.getElementById("view-sub").textContent =
+    plural(Object.keys(METRICS).length, "metrika", "metriky", "metrik")
+    + " · " + plural(MONTHS.length, "měsíc", "měsíce", "měsíců");
+  document.getElementById("view-about").innerHTML = spec.about;
+
   buildTilesFor(m);
 
+  document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu · " + lowerLabel(m);
+  document.getElementById("map-cap").textContent = spec.additive
+    ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najeďte na zónu a přečtete si celý její profil za tenhle měsíc, ne jen metriku, podle které je obarvená."
+    : "Barva je pořadí: šest pásem, v každém stejný počet zón. Šedé jsou zóny, kde je průměr postavený na míň než 0,1 % jízd měsíce — pásma se počítají bez nich, aby hranice barev neurčoval šum.";
+  drawMap(document.getElementById("zonemap"), m);
+
+  document.getElementById("history-title").textContent = spec.label + " měsíc po měsíci";
   drawHistory(document.getElementById("history"));
+
+  document.getElementById("daily-title").textContent = spec.label + " den po dni · " + lowerLabel(m);
   drawDaily(document.getElementById("daily"), m);
 
-  document.getElementById("zones-cap").textContent =
-    "Podle zveřejněných jízd v " + label(m) + ", přiřazených k zóně nástupu.";
-
-  const zones = m.zones.slice(0, 10).map((z) => ({
-    label: z.zone,
-    full: z.zone,
-    value: z.trips,
-    display: nf.format(z.trips),
-    tip: `${nf.format(z.trips)} jízd · ${z.borough}<br><span class="r">tržby ${usdM(z.revenue)} · průměr ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}</span>`,
-  }));
-  drawBars(document.getElementById("zones"), zones, { labelW: 170, valueW: 76, fill: "var(--s3)", title: "Zóny nástupu podle počtu jízd" });
-
-  buildZoneTable(m);
+  drawZones(m);
+  buildMeanMedian(m);
 }
 
 buildHeader();
 buildPicker();
 buildMetricPicker();
-// Mapa je za celou historii a škáluje ji CSS, takže se kreslí jednou -- ani měsíční
-// přepínač, ani resize s ní nehnou.
-drawMap(document.getElementById("zonemap"));
 render();
 watchResize();

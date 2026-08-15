@@ -321,6 +321,24 @@ tbody tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* ---------- controls ---------- */
 
+/* Měsíc a metrika platí pro celou stránku, ne pro jednu kartu, takže ovládání stojí nad
+   vším a je lepkavé: u spodních karet musí být pořád po ruce, jinak se čtenář roluje
+   nahoru jen proto, aby zjistil, co vlastně čte. Vlastní pozadí a linka pod tím jsou
+   nutné -- průhledná lišta by přes sebe pustila grafy, které pod ní projíždějí. */
+.controls {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--ground);
+  border-bottom: 1px solid var(--rule);
+  margin: -12px 0 -18px;
+  padding: 12px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+}
+
 .picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 select {
@@ -441,10 +459,10 @@ select {
 .map path { stroke: var(--surface); stroke-width: 0.7; stroke-linejoin: round; }
 .map path.hl { fill: none; stroke: var(--ink); stroke-width: 2.6; pointer-events: none; }
 
-/* Přepínač metriky: viditelná řada, ne `select` v hlavičce sekce. Osm možností se do řady
-   vejde a je na první pohled vidět, že mapa jde přepnout -- rozbalovátko to netvrdí.
+/* Přepínač metriky: viditelná řada, ne `select`. Osm možností se do řady vejde a je na
+   první pohled vidět, že stránka jde přepnout -- rozbalovátko to netvrdí.
    Skupiny odděluje mezera: součty, průměry na jízdu, poměry mezi průměry. */
-.metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
+.metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .metrics .sep { width: 1px; align-self: stretch; background: var(--rule); margin: 2px 5px; }
 
 .mbtn {

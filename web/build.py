@@ -25,9 +25,13 @@ Skládá se to ze společných kusů (`style.css`, `common.js`) a dvojice per st
 `quarantine.html` + `quarantine.js`).
 Výsledek je pořád jeden soubor na stránku -- žádný externí requestem tažený asset.
 
-Rozsah dat ve stránce je záměrně menší než curated: denní řady, top zóny a jeden
-agregát na zónu přes celou historii pro mapu -- ne všechny řádky. Kdo chce celý
-výstup, čte parquet.
+Rozsah dat ve stránce je záměrně menší než curated: denní řady a jeden součet na
+(zónu, měsíc) -- ne všechny řádky. Kdo chce celý výstup, čte parquet.
+
+Datová stránka je jeden řízený pohled: čtenář si vybere měsíc a metriku a všechno, co
+vidí, je z toho měsíce a v té metrice. Payload tomu odpovídá -- nese sčitatelné součty,
+ne hotové průměry, aby si stránka mohla průměr dopočítat pro libovolný řez, na který se
+někdo zeptá.
 
 Obrysy zón do mapy nese `web/zones.json`, který se commituje a vyrábí ho `web/geo.py`.
 Build tedy nikam nesahá pro geometrii; TLC ji mění jednou za pár let.
@@ -49,7 +53,6 @@ from app import pipeline, storage  # noqa: E402
 from app.config import Config  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
-TOP_ZONES = 25
 
 # Sloupce curated, bez kterých se stránka nepostaví. Není to celý výstup pipeline: co
 # stránka nekreslí, ať klidně chybí.
@@ -66,9 +69,53 @@ REQUIRED_COLUMNS = (
     "median_distance_mi",
     "distance_obs",
     "avg_duration_min",
+    "median_duration_min",
     "duration_obs",
     "avg_fare_usd",
     "fare_obs",
+)
+
+# Co se do stránky posílá o každém řezu dat (zóna v měsíci, jeden den). Všechno jsou
+# *sčitatelné* veličiny -- součty a jejich jmenovatele, ne hotové průměry. Průměr si
+# stránka dopočítá pro libovolný řez, který si čtenář vybere: jedna zóna v jednom
+# měsíci, celý měsíc, celá historie. Kdyby se posílal průměr, šlo by ho zpátky sečíst
+# jen s vahami, které by v payloadu stejně musely být -- takhle je v něm rovnou to,
+# co je additivní, a průměr vzniká až na poslední chvíli a všude stejným vzorcem.
+SUM_COLUMNS = (
+    "trips",
+    "revenue",
+    "refunds",
+    "dist_obs",
+    "dist_sum",
+    "dur_obs",
+    "dur_sum",
+    "fare_obs",
+    "fare_sum",
+)
+
+# Medián sečíst nejde, takže stojí mimo `SUM_COLUMNS`: bere se medián denních mediánů
+# a stránka ho tak i popisuje. Je jen u zón, ne u dnů -- tabulka průměr/medián je řez
+# přes zóny jednoho měsíce.
+MEDIAN_COLUMNS = ("median_dist", "median_dur")
+
+# Vážené součty se počítají zpátky z průměru a jeho jmenovatele, protože curated nese
+# průměr (to je číslo, které se vykazuje) a ne součet. Zaokrouhlení je na jednotku,
+# ve které se pak čte: dolary celé, míle a minuty na desetinu.
+SUM_AGGREGATES = (
+    pl.col("trips").sum().alias("trips"),
+    pl.col("yellow_revenue_usd").sum().round(0).cast(pl.Int64).alias("revenue"),
+    pl.col("refunds_usd").sum().round(0).cast(pl.Int64).alias("refunds"),
+    pl.col("distance_obs").sum().alias("dist_obs"),
+    (pl.col("avg_distance_mi") * pl.col("distance_obs")).sum().round(1).alias("dist_sum"),
+    pl.col("duration_obs").sum().alias("dur_obs"),
+    (pl.col("avg_duration_min") * pl.col("duration_obs")).sum().round(1).alias("dur_sum"),
+    pl.col("fare_obs").sum().alias("fare_obs"),
+    (pl.col("avg_fare_usd") * pl.col("fare_obs")).sum().round(0).cast(pl.Int64).alias("fare_sum"),
+)
+
+MEDIAN_AGGREGATES = (
+    pl.col("median_distance_mi").median().round(2).alias("median_dist"),
+    pl.col("median_duration_min").median().round(2).alias("median_dur"),
 )
 
 # Kostra je společná, liší se jen title, tělo a skript. Bez `<head>`: prohlížeč si ho
@@ -104,18 +151,9 @@ PAGES = {
         "data",
         "Žluté taxíky NYC po zónách",
         "Jízdy žlutých medailonových taxíků v New Yorku podle zóny nástupu a podle dne.",
-        (
-            "key",
-            "year",
-            "month",
-            "trips",
-            "revenue",
-            "refunds",
-            "net_revenue",
-            "daily",
-            "zones",
-            "zones_total",
-        ),
+        # Bez měsíčních součtů: ty se dají sečíst ze `zones` a jeden zdroj čísla znamená,
+        # že se dlaždice nemůže rozejít s mapou pod ní.
+        ("key", "year", "month", "daily", "zones"),
     ),
     # Metodická stránka počítá z manifestů totéž co provozní, jen přes celou historii
     # místo jednoho běhu -- proto tytéž klíče a žádná mapa ani denní řady.
@@ -210,76 +248,45 @@ def read_runs(layout: storage.Layout, year: int, month: int) -> list[dict]:
 
 
 def zone_sums(frame: pl.DataFrame) -> pl.DataFrame:
-    """Součty na zónu. Průměr vzdálenosti i jízdného nese svůj jmenovatel zvlášť, aby
-    se daly sečíst přes víc měsíců a vážený průměr dopočítat až nakonec; medián takhle
-    sečíst nejde, bere se medián denních mediánů a stránka ho tak i popisuje."""
-    return frame.group_by("location_id", "borough", "zone").agg(
-        pl.col("trips").sum().alias("trips"),
-        pl.col("yellow_revenue_usd").sum().round(0).alias("revenue"),
-        pl.col("refunds_usd").sum().round(0).alias("refunds"),
-        pl.col("net_revenue_usd").sum().round(0).alias("net_revenue"),
-        pl.col("distance_obs").sum().alias("distance_obs"),
-        (pl.col("avg_distance_mi") * pl.col("distance_obs")).sum().alias("_dist"),
-        pl.col("median_distance_mi").median().round(2).alias("median_distance_mi"),
-        pl.col("duration_obs").sum().alias("duration_obs"),
-        (pl.col("avg_duration_min") * pl.col("duration_obs")).sum().alias("_dur"),
-        (pl.col("avg_fare_usd") * pl.col("fare_obs")).sum().alias("_fare"),
-        pl.col("fare_obs").sum().alias("fare_obs"),
-    )
+    """Jeden řádek na zónu za ten měsíc: sčitatelné součty a jejich jmenovatele."""
+    return frame.group_by("location_id", "borough", "zone").agg(*SUM_AGGREGATES, *MEDIAN_AGGREGATES)
 
 
-def zone_stats(sums: pl.DataFrame) -> pl.DataFrame:
-    """Ze součtů udělá čísla k zobrazení, seřazená od nejvytíženější zóny."""
-    # Dělit se smí, jen když je čím. Zóna s hrstkou jízd může mít nula pozorování
-    # vzdálenosti nebo jízdného a 0/0 je v polars NaN -- což `json.dumps` zapíše jako
-    # literál NaN a `JSON.parse` na něm spadne, takže by se rozsypala celá stránka,
-    # ne jen jedna buňka. Prázdný jmenovatel je null: "není z čeho počítat".
-    return (
-        sums.with_columns(
-            avg_distance_mi=pl.when(pl.col("distance_obs") > 0)
-            .then(pl.col("_dist") / pl.col("distance_obs"))
-            .round(2),
-            avg_duration_min=pl.when(pl.col("duration_obs") > 0)
-            .then(pl.col("_dur") / pl.col("duration_obs"))
-            .round(2),
-            avg_fare_usd=pl.when(pl.col("fare_obs") > 0)
-            .then(pl.col("_fare") / pl.col("fare_obs"))
-            .round(2),
-            # `coverage` je jmenovatel vzdálenosti -- ten nese tabulka mean/median níž na
-            # stránce. Doba jízdy má svůj vlastní a liší se: na mapě se dá obarvit rychlost,
-            # která stojí na obou, takže musí být vidět oba.
-            coverage=pl.when(pl.col("trips") > 0)
-            .then(pl.col("distance_obs") / pl.col("trips"))
-            .round(4),
-            duration_coverage=pl.when(pl.col("trips") > 0)
-            .then(pl.col("duration_obs") / pl.col("trips"))
-            .round(4),
-        )
-        .drop("_dist", "_dur", "_fare")
-        .sort("trips", descending=True)
-    )
+def daily_sums(frame: pl.DataFrame) -> pl.DataFrame:
+    """Totéž po dnech, přes všechny zóny. Tytéž agregace, aby denní křivka a mapa nemohly
+    počítat průměr každá po svém."""
+    return frame.group_by("date").agg(*SUM_AGGREGATES).sort("date")
 
 
-def merge_zone_sums(monthly: list[pl.DataFrame]) -> pl.DataFrame:
-    """Součty za celou historii. Sečte se totéž co v měsíci -- vážené čitatele, ne už
-    hotové průměry -- takže agregát přes historii je stejné číslo jako přes jeden měsíc."""
+def columns(frame: pl.DataFrame, names: tuple[str, ...]) -> dict[str, list]:
+    """Sloupcově, ne po řádcích. Jména polí by se ve slovníku na řádek opakovala pro
+    každou z 261 zón v každém z měsíců a byla by to většina payloadu; takhle jsou
+    v souboru jednou. Cenou je, že se pole musí držet zarovnaná -- proto je pořadí zón
+    jedno sdílené (`map.ids`) a měsíc do něj jen dosazuje hodnoty."""
+    return {name: frame[name].to_list() for name in names}
+
+
+def zone_index(monthly: list[pl.DataFrame]) -> pl.DataFrame:
+    """Pořadí zón, na které se zarovnávají sloupce všech měsíců. Je společné, protože
+    zóna, ve které se v březnu nikdo nesvezl, musí mít v březnu index taky -- jinak by
+    se pole měsíc od měsíce rozjela."""
     return (
         pl.concat(monthly)
         .group_by("location_id", "borough", "zone")
-        .agg(
-            pl.col("trips").sum(),
-            pl.col("revenue").sum(),
-            pl.col("refunds").sum(),
-            pl.col("net_revenue").sum(),
-            pl.col("distance_obs").sum(),
-            pl.col("_dist").sum(),
-            pl.col("median_distance_mi").median().round(2),
-            pl.col("duration_obs").sum(),
-            pl.col("_dur").sum(),
-            pl.col("_fare").sum(),
-            pl.col("fare_obs").sum(),
-        )
+        .agg(pl.col("trips").sum())
+        .sort("trips", descending=True)
+        .drop("trips")
     )
+
+
+def zone_columns(sums: pl.DataFrame, index: pl.DataFrame) -> dict[str, list]:
+    """Měsíční součty dosazené do sdíleného pořadí zón. Zóna bez jediné jízdy v tom
+    měsíci má nuly, ne null: nula jízd je tvrzení o datech, které jsme udělali. Medián
+    zůstává null -- ten se z ničeho spočítat nedá a stránka na to má vlastní stav."""
+    joined = index.join(sums, on=["location_id", "borough", "zone"], how="left").with_columns(
+        pl.col(SUM_COLUMNS).fill_null(0)
+    )
+    return columns(joined, SUM_COLUMNS + MEDIAN_COLUMNS)
 
 
 def check_columns(frame: pl.DataFrame, year: int, month: int) -> None:
@@ -298,20 +305,7 @@ def check_columns(frame: pl.DataFrame, year: int, month: int) -> None:
 def month_payload(layout: storage.Layout, year: int, month: int) -> tuple[dict, pl.DataFrame]:
     frame = storage.scan_parquet(layout.curated_file(year, month)).collect()
     check_columns(frame, year, month)
-
-    daily = (
-        frame.group_by("date")
-        .agg(
-            pl.col("trips").sum().alias("trips"),
-            pl.col("yellow_revenue_usd").sum().round(2).alias("revenue"),
-            pl.col("refunds_usd").sum().round(2).alias("refunds"),
-            pl.col("net_revenue_usd").sum().round(2).alias("net_revenue"),
-        )
-        .sort("date")
-    )
-
-    sums = zone_sums(frame)
-    zones = zone_stats(sums)
+    daily = daily_sums(frame)
 
     payload = {
         "key": f"{year}-{month:02d}",
@@ -323,51 +317,31 @@ def month_payload(layout: storage.Layout, year: int, month: int) -> tuple[dict, 
         "refunds": round(float(frame["refunds_usd"].sum()), 2),
         "net_revenue": round(float(frame["net_revenue_usd"].sum()), 2),
         "runs": read_runs(layout, year, month),
-        "daily": daily.to_dicts(),
-        "zones": zones.head(TOP_ZONES).to_dicts(),
-        "zones_total": zones.height,
+        "daily": {"date": [str(d) for d in daily["date"]]} | columns(daily, SUM_COLUMNS),
     }
-    return payload, sums
+    return payload, zone_sums(frame)
 
 
-def map_payload(monthly: list[pl.DataFrame]) -> dict:
-    """Podklad pro choropleth: obrysy zón a k nim čísla za celou historii.
+def map_payload(index: pl.DataFrame) -> dict:
+    """Podklad pro choropleth: obrysy zón a jména k nim. Čísla tu nejsou -- ta nese
+    každý měsíc svoje, protože mapa sleduje měsíční přepínač stejně jako zbytek stránky.
 
-    Mapa vědomě nesleduje měsíční přepínač zbytku stránky -- 265 zón krát každý měsíc
-    by payload nafouklo řádově víc než celá dosavadní stránka. Jeden agregát přes
-    historii ukáže totéž rozložení a stránka u mapy říká, za jaké období je.
+    Rozpočet na to je: 261 zón krát 29 měsíců by po řádcích payload nafouklo o megabajt,
+    sloupcově to je ~14 kB na měsíc. Zaplatí se to tím, že měsíční seznam nejvytíženějších
+    zón v payloadu být nemusí -- žebříček, tabulka i mapa čtou tentýž blok.
     """
     geo = json.loads((HERE / "zones.json").read_text())
-    zones = zone_stats(merge_zone_sums(monthly)).select(
-        "location_id",
-        "borough",
-        "zone",
-        "trips",
-        "revenue",
-        "refunds",
-        "net_revenue",
-        "avg_fare_usd",
-        "avg_distance_mi",
-        "avg_duration_min",
-        "coverage",
-        "duration_coverage",
-    )
-
-    # Zóny 264/265 ("NV", "Outside of NYC") žádný obrys nemají a mít nebudou: nejsou to
-    # místa, ale zbytkové kódy. Jejich jízdy se do mapy nevejdou, tak ať to stránka řekne.
-    drawn = set(geo["zones"])
-    off_map = zones.filter(~pl.col("location_id").cast(pl.String).is_in(drawn))
-
     return {
         "width": geo["width"],
         "height": geo["height"],
         "paths": geo["zones"],
+        # Jména ze shapefilu pro zóny, které v curated nemají ani řádek: obrys se kreslí,
+        # ale číslo k němu není. Zóny s daty se jmenují podle lookupu, který pipeline
+        # joinovala -- ta jména jsou níž v `zone`/`borough`.
         "names": geo["names"],
-        "zones": zones.to_dicts(),
-        "off_map": {
-            "zones": off_map.height,
-            "trips": int(off_map["trips"].sum()),
-        },
+        "ids": index["location_id"].to_list(),
+        "zone": index["zone"].to_list(),
+        "borough": index["borough"].to_list(),
     }
 
 
@@ -419,6 +393,12 @@ def build() -> list[pathlib.Path]:
         raise SystemExit(f"v {layout.curated_uri} nejsou žádné partition")
     months = [payload for payload, _ in built]
 
+    # Pořadí zón se musí ustálit dřív, než do něj měsíce dosadí svoje sloupce, takže
+    # tenhle krok jde až po přečtení všech partition.
+    index = zone_index([sums for _, sums in built])
+    for payload, sums in built:
+        payload["zones"] = zone_columns(sums, index)
+
     # Co je na obou stránkách: odkud data jsou, kdy se to postavilo, jak čerstvý je zdroj.
     # Bez URI curated -- jméno bucketu nese číslo AWS účtu a stránky jsou veřejné.
     common = {
@@ -440,7 +420,7 @@ def build() -> list[pathlib.Path]:
     for filename, (name, title, desc, keys) in PAGES.items():
         payload = common | {"months": [{k: m[k] for k in keys} for m in months]}
         if name == "data":
-            payload["map"] = map_payload([sums for _, sums in built])
+            payload["map"] = map_payload(index)
 
         out = out_dir / filename
         out.write_text(render(filename, name, title, desc, payload, style))

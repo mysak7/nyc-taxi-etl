@@ -3,7 +3,8 @@
   <h1>Kam si New York bere žlutý taxík</h1>
   <p class="lead">
     Každá jízda žlutého medailonového taxíku, kterou město zveřejnilo, přiřazená k zóně,
-    ve které začala, a sečtená po dnech. Vyberte metriku, najeďte na zónu, prolistujte měsíce.
+    ve které začala, a sečtená po dnech. Vyberte měsíc a metriku — mapa, řady i žebříčky
+    pod tím pak mluví o jednom měsíci a o jedné veličině.
   </p>
   <p class="lead">
     Žluté taxíky jsou jen část trhu placené přepravy — zhruba osmina toho, co New Yorčané
@@ -13,52 +14,44 @@
   <div class="status" id="status"></div>
 </header>
 
-<section>
-  <div class="sec-head">
-    <h2>Mapa</h2>
-    <p class="hint">osm metrik · celá historie</p>
+<div class="controls">
+  <div class="picker">
+    <button class="step-btn" type="button" id="prev" aria-label="Předchozí měsíc">◀</button>
+    <select id="month-select" aria-label="Vyberte měsíc"></select>
+    <button class="step-btn" type="button" id="next" aria-label="Následující měsíc">▶</button>
   </div>
-  <p class="note">
-    Každá jízda nese zónu, ve které se nastupovalo, takže data už sama o sobě jsou mapa.
-    Obrysy pocházejí ze shapefilu taxi zón, který vydává město. Najeďte na zónu a přečtete
-    si celý její profil, ne jen metriku, podle které je obarvená.
-  </p>
-
-  <div class="card">
-    <h3 id="map-title"></h3>
-    <p class="cap">
-      Barva je pořadí: šest pásem, v každém stejný počet zón. Průměr postavený na hrstce
-      jízd je nespolehlivý průměr, a tak bublina vždy ukazuje, na kolika jízdách stojí.
-    </p>
-    <div class="metrics" id="metric-picker" role="group" aria-label="Obarvit mapu podle"></div>
-    <p class="cap" id="map-about"></p>
-    <div class="ramp" id="map-legend"></div>
-    <div class="plot map" id="zonemap"></div>
-    <p class="hint" id="map-foot"></p>
-  </div>
-</section>
+  <div class="metrics" id="metric-picker" role="group" aria-label="Vyberte metriku"></div>
+</div>
 
 <section>
   <div class="sec-head">
-    <h2>Měsíc po měsíci</h2>
-    <div class="picker">
-      <button class="step-btn" type="button" id="prev" aria-label="Předchozí měsíc">◀</button>
-      <select id="month-select" aria-label="Vyberte měsíc"></select>
-      <button class="step-btn" type="button" id="next" aria-label="Následující měsíc">▶</button>
-    </div>
+    <h2 id="view-title"></h2>
+    <p class="hint" id="view-sub"></p>
   </div>
+  <p class="note" id="view-about"></p>
 
   <div class="kpis" id="kpis"></div>
   <p class="cap" id="kpis-cap"></p>
 
   <div class="card">
-    <h3>Jízdy po měsících</h3>
-    <p class="cap">Každý měsíc, který město zveřejnilo. Kliknutím na sloupec ho načtete níž.</p>
+    <h3 id="map-title"></h3>
+    <p class="cap" id="map-cap"></p>
+    <div class="ramp" id="map-legend"></div>
+    <div class="plot map" id="zonemap"></div>
+    <p class="hint" id="map-foot"></p>
+  </div>
+
+  <div class="card">
+    <h3 id="history-title"></h3>
+    <p class="cap">
+      Jediný graf na stránce, který nesleduje vybraný měsíc — jinak by neměl co ukazovat.
+      Vybraný měsíc je v něm zvýrazněný, kliknutím se přepne.
+    </p>
     <div class="plot" id="history"></div>
   </div>
 
   <div class="card">
-    <h3>Jízdy po dnech</h3>
+    <h3 id="daily-title"></h3>
     <p class="cap">Podbarvené pruhy jsou víkendy — sobota a neděle se jezdí jinak a pondělní schod je začátek týdne, ne výpadek.</p>
     <div class="plot" id="daily"></div>
     <details>
@@ -68,31 +61,17 @@
   </div>
 
   <div class="card">
-    <h3>Nejvytíženější zóny</h3>
+    <h3 id="zones-title"></h3>
     <p class="cap" id="zones-cap"></p>
     <div class="plot" id="zones"></div>
   </div>
 
   <div class="card">
-    <h3>Průměr vedle mediánu</h3>
-    <p class="cap">
-      Hrstka jízd s nevěrohodným stavem tachometru táhne průměrnou vzdálenost nahoru;
-      medián zůstává na místě. Pokrytí je podíl jízd, na kterých se průměr vůbec dal
-      změřit — čtěte průměr s okem na něm.
-    </p>
+    <h3 id="mm-title"></h3>
+    <p class="cap" id="mm-cap"></p>
     <div class="scroll">
       <table>
-        <thead>
-          <tr>
-            <th>Zóna</th>
-            <th>Obvod</th>
-            <th class="num">Jízdy</th>
-            <th class="num">Prům. vzdál.</th>
-            <th class="num">Medián</th>
-            <th class="num">Pokrytí</th>
-            <th class="num">Prům. jízdné</th>
-          </tr>
-        </thead>
+        <thead id="mm-head"></thead>
         <tbody id="ztable"></tbody>
       </table>
     </div>
@@ -123,6 +102,12 @@
     nástupu a dne nástupu. Stránka je statická — celá historie jsou jednotky megabajtů, takže
     je zapečená v souboru a při čtení se nic nedotahuje. Kdo chce každý řádek, čte místo toho
     Parquet.
+  </p>
+  <p class="note">
+    V souboru nejsou hotové průměry, ale součty a jejich jmenovatele. Průměr se počítá až
+    v prohlížeči a pro ten řez, na který se zrovna díváte — proto je průměrná vzdálenost
+    zóny za měsíc přesně tím, čím by byla, kdyby se počítala z jednotlivých jízd, a ne
+    průměrem průměrů.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

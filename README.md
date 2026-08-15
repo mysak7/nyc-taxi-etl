@@ -303,19 +303,27 @@ infra/       main.tf (S3, ECR, Lambda) · orchestration.tf (Step Functions, sche
              alarmy) · iam.tf (čtyři role a jejich hranice)
 web/         build.py (staví všechny stránky z curated) · geo.py + zones.json (obrysy zón)
              style.css + common.js (společné) · data.* (co se jezdí) · method.* (proč tak)
-             pipeline.* (provoz)
+             pipeline.* (provoz) · quarantine.* (co se vyhodilo)
 ```
 
-Stránka je statická a jsou tři, protože otázky jsou tři. `index.html` odpovídá na „co se
-v New Yorku jezdí" (mapa zón, měsíce, průměr vedle mediánu) a je psaná, jako by byla
-veřejná produkční stránka — metodické poznámky na ní nejsou. `method.html` odpovídá na
-„proč jsou ta čísla taková": šest rozhodnutí z této sekce postavených jako spor (co by
-udělal snadný postup, co by stál, co se dělá místo toho), jak se prahy měří a zapisují,
-a co výstup pořád neumí. `pipeline.html` odpovídá na „dá se tomu běhu věřit" (manifesty,
-prahy, co pravidla chytila).
+Stránka je statická a jsou čtyři, protože otázky jsou čtyři. `index.html` odpovídá na „co
+se v New Yorku jezdí" a je psaná, jako by byla veřejná produkční stránka — metodické
+poznámky na ní nejsou. Je to **jeden řízený pohled**: nahoře se vybere měsíc a jedna z osmi
+metrik a mapa, denní křivka, žebříček zón i dlaždice jsou z toho měsíce a v té metrice.
+Jediná výjimka je graf přes všechny měsíce, který by jinak neměl co ukazovat.
+`method.html` odpovídá na „proč jsou ta čísla taková": šest rozhodnutí z této sekce
+postavených jako spor (co by udělal snadný postup, co by stál, co se dělá místo toho),
+jak se prahy měří a zapisují, a co výstup pořád neumí. `pipeline.html` odpovídá na „dá se
+tomu běhu věřit" (manifesty, prahy, co pravidla chytila), `quarantine.html` na „co v těch
+číslech není".
 
-Rozdělený je i payload — mapa se dostane jen na datovou stránku, manifesty jen na
-provozní a metodickou. Argumenty na `method.html` jsou pevný text, ale všechny počty,
+Payload nenese **žádný hotový průměr** — jen sčitatelné součty a jejich jmenovatele, na
+zónu a měsíc, sloupcově. Průměr se počítá až v prohlížeči a pro ten řez, na který se
+čtenář zeptá, takže mapa, žebříček i tabulka mluví jednou definicí a průměr zóny za měsíc
+je opravdu průměr, ne průměr průměrů. Metriky s jmenovatelem se počítají jen tam, kde má
+zóna aspoň 0,1 % jízd měsíce; jinak je na mapě šedá a v žebříčku není. Rozdělený je i
+payload mezi stránkami — mapa se dostane jen na datovou, manifesty jen na provozní,
+metodickou a karanténní. Argumenty na `method.html` jsou pevný text, ale všechny počty,
 prahy a podíly v tabulce pravidel a v grafu rezerv se počítají z manifestů; kde je číslo
 změřené jednorázově nad celou historií, věta říká, na kterém měsíci. Nasazuje je
 [`.github/workflows/web.yml`](.github/workflows/web.yml) na Cloudflare Pages, po nočním
