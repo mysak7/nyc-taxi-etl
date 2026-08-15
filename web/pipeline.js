@@ -145,7 +145,7 @@ function render() {
       display: nf.format(v),
       tip: `${nf.format(v)} rows · ${RULE_EFFECT[k] || "—"}<br><span class="r">${k}</span>`,
     }));
-  drawBars(document.getElementById("rules"), rules, { labelW: 148, valueW: 74, title: "Rows touched by each data quality rule" });
+  drawBars(document.getElementById("rules"), rules, { labelW: 148, valueW: 74, fill: "var(--s3)", title: "Rows touched by each data quality rule" });
 }
 
 buildHeader();

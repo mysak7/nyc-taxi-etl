@@ -155,6 +155,8 @@ function placeTip(tip, host, x, y) {
 
 /* ---------- chart: horizontal bars ---------- */
 
+// `opts.fill` je odstín celého grafu, ne jednotlivých pruhů: obarvit pruhy podle pořadí
+// by tvrdilo, že první zóna je jiná kategorie než druhá -- je to táž veličina, jen menší.
 function drawBars(host, items, opts) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
   const rowH = 20, gap = 9, T = 4;
@@ -169,7 +171,7 @@ function drawBars(host, items, opts) {
     const y = T + i * (rowH + gap);
     const w = (d.value / max) * pw;
     svg.appendChild(el("text", { x: labelW, y: y + rowH / 2 + 4, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, fit(d.label, labelW)));
-    svg.appendChild(el("path", { d: barPath(labelW + 12, y, w, rowH, 4), fill: "var(--s1)" }));
+    svg.appendChild(el("path", { d: barPath(labelW + 12, y, w, rowH, 4), fill: opts.fill || "var(--s1)" }));
     svg.appendChild(el("text", { x: labelW + 12 + w + 8, y: y + rowH / 2 + 4, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 11, "font-variant-numeric": "tabular-nums" }, d.display));
 
     const hit = el("rect", { x: 0, y: y - gap / 2, width, height: rowH + gap, fill: "transparent" });

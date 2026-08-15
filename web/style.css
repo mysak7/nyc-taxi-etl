@@ -8,9 +8,16 @@
   --rule: #e3e1d8;
   --rule-strong: #c9c7bc;
   --accent: #e8a600;
+  /* Kategoriální řada: jeden odstín na graf, pevné pořadí. Grafy pod sebou tak nejsou
+     všechny stejně modré a odstín drží stejný význam napříč měsíci. Tři, ne víc:
+     čtvrtý odstín už s těmihle třemi neudrží odstup pro barvoslepé oči.
+     Červená se tu nepoužívá schválně -- je vyhrazená pro stav (chyba, práh). */
   --s1: #2a78d6;
   --s1-soft: rgba(42, 120, 214, 0.13);
   --s2: #eb6834;
+  --s2-soft: rgba(235, 104, 52, 0.14);
+  --s3: #1baf7a;
+  --s3-soft: rgba(27, 175, 122, 0.15);
   --band: rgba(11, 11, 11, 0.035);
   --hover: rgba(11, 11, 11, 0.04);
   --good: #0ca30c;
@@ -39,6 +46,9 @@
     --s1: #3987e5;
     --s1-soft: rgba(57, 135, 229, 0.18);
     --s2: #d95926;
+    --s2-soft: rgba(217, 89, 38, 0.2);
+    --s3: #199e70;
+    --s3-soft: rgba(25, 158, 112, 0.2);
     --band: rgba(255, 255, 255, 0.045);
     --hover: rgba(255, 255, 255, 0.05);
     --good: #0ca30c;
@@ -62,6 +72,9 @@
   --s1: #3987e5;
   --s1-soft: rgba(57, 135, 229, 0.18);
   --s2: #d95926;
+  --s2-soft: rgba(217, 89, 38, 0.2);
+  --s3: #199e70;
+  --s3-soft: rgba(25, 158, 112, 0.2);
   --band: rgba(255, 255, 255, 0.045);
   --hover: rgba(255, 255, 255, 0.05);
   --good: #0ca30c;

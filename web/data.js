@@ -85,8 +85,8 @@ function drawDaily(host, m) {
   }
 
   const line = days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d.trips).toFixed(1)}`).join(" ");
-  svg.appendChild(el("path", { d: `${line} L${x(days.length - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`, fill: "var(--s1-soft)" }));
-  svg.appendChild(el("path", { d: line, fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  svg.appendChild(el("path", { d: `${line} L${x(days.length - 1).toFixed(1)},${y(0)} L${x(0).toFixed(1)},${y(0)} Z`, fill: "var(--s2-soft)" }));
+  svg.appendChild(el("path", { d: line, fill: "none", stroke: "var(--s2)", "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
 
   const every = Math.max(2, Math.ceil(days.length / Math.max(2, Math.floor(pw / 64))));
   days.forEach((d, i) => {
@@ -96,12 +96,12 @@ function drawDaily(host, m) {
 
   // Direct-label the peak only; a number on every point goes unread.
   const peak = days.reduce((a, b, i) => (b.trips > days[a].trips ? i : a), 0);
-  svg.appendChild(el("circle", { cx: x(peak), cy: y(days[peak].trips), r: 5, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": 2 }));
+  svg.appendChild(el("circle", { cx: x(peak), cy: y(days[peak].trips), r: 5, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2 }));
   const anchor = peak > days.length - 5 ? "end" : peak < 4 ? "start" : "middle";
   svg.appendChild(el("text", { x: x(peak), y: y(days[peak].trips) - 12, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 11, "font-weight": 600, "text-anchor": anchor }, nf.format(days[peak].trips)));
 
   const cross = el("line", { x1: 0, x2: 0, y1: T, y2: T + ph, stroke: "var(--rule-strong)", "stroke-width": 1, opacity: 0 });
-  const knob = el("circle", { r: 5, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": 2, opacity: 0 });
+  const knob = el("circle", { r: 5, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2, opacity: 0 });
   svg.append(cross, knob);
 
   const tip = tipFor(host);
@@ -417,7 +417,7 @@ function render() {
     display: nf.format(z.trips),
     tip: `${nf.format(z.trips)} trips · ${z.borough}<br><span class="r">${usdM(z.revenue)} revenue · mean ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}</span>`,
   }));
-  drawBars(document.getElementById("zones"), zones, { labelW: 170, valueW: 76, title: "Pickup zones by trip count" });
+  drawBars(document.getElementById("zones"), zones, { labelW: 170, valueW: 76, fill: "var(--s3)", title: "Pickup zones by trip count" });
 
   buildZoneTable(m);
 }
