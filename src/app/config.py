@@ -23,6 +23,7 @@ class Config:
     max_distance_mi: float
     max_duration_min: float
     max_reject_ratio: float
+    max_reversal_ratio: float
     max_volume_delta: float
     max_null_ratio_distance: float
     max_null_ratio_duration: float

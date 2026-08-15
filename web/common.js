@@ -77,7 +77,8 @@ function select(key) {
 const RULE_LABELS = {
   negative_fare: () => "záporné jízdné",
   zero_distance: () => "nulová vzdálenost",
-  nonpositive_total: () => "nekladná celková částka",
+  reversal: () => "storno jízdy",
+  zero_total: () => "jízda bez tržby",
   nonpositive_duration: () => "nekladná doba jízdy",
   out_of_month: () => "vyzvednutí mimo měsíc",
   duration_over_limit: (t) => (t.max_duration_min ? "doba jízdy přes " + t.max_duration_min / 60 + " h" : "doba jízdy přes limit"),
@@ -85,8 +86,12 @@ const RULE_LABELS = {
   impossible_speed: (t) => (t.max_speed_mph ? "odvozená rychlost přes " + nf.format(t.max_speed_mph) + " mph" : "nemožná rychlost"),
 };
 
+/* "karanténa" a "storno" oboje berou celý řádek, ale znamenají opak: karanténa je
+   "tomuhle řádku nevěřím", storno "tomuhle řádku věřím, jenom to není jízda". Držet je
+   pod jedním důsledkem znamenalo tvrdit, že se 1,8 % dat zahazuje jako vadných. */
 const RULE_EFFECT = {
-  nonpositive_total: "karanténa",
+  reversal: "storno",
+  zero_total: "jen se počítá",
   out_of_month: "karanténa",
   negative_fare: "pole vynulováno",
   zero_distance: "pole vynulováno",
@@ -106,6 +111,10 @@ const RULE_FIELD = {
   nonpositive_duration: "duration_min",
   duration_over_limit: "duration_min",
 };
+
+// Důsledky, které berou celý řádek. Pole u nich nemá smysl, tabulka místo něj píše
+// "celý řádek".
+const ROW_EFFECTS = ["karanténa", "storno"];
 
 const ruleLabel = (name, applied) => (RULE_LABELS[name] ? RULE_LABELS[name](applied || {}) : name);
 

@@ -146,7 +146,7 @@ def run_month(
     dq.gate(result.metrics, cfg, previous)
 
     storage.write_parquet(paths.curated_file(year, month), result.aggregate)
-    storage.write_parquet(paths.rejects_file(year, month), result.rejects)
+    storage.write_parquet(paths.rejects_file(year, month), result.excluded)
     manifest = {
         "schema_version": 1,
         "run_id": run_id,

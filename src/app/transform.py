@@ -1,5 +1,5 @@
-"""Čistá transformace: LazyFrame -> (agregace, karanténa, metriky). Žádné I/O, žádné
-cesty -- proto se testuje bez disku.
+"""Čistá transformace: LazyFrame -> (agregace, vyřazené řádky, metriky). Žádné I/O,
+žádné cesty -- proto se testuje bez disku.
 
 Jeden průchod zdrojem: `scan_parquet` + jeden `collect()`. Lazy je tu kvůli projection
 pushdownu (20 sloupců = 467 MB v paměti, 6 potřebných = 146 MB), ne kvůli streamingu.
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from .dq import Rule
+from .dq import NO_ROW_ACTIONS, REVERSAL, ROW_ACTIONS, Rule
 
 NEEDED = [
     "tpep_pickup_datetime",
@@ -46,7 +46,7 @@ OUTPUT_COLUMNS = [
 @dataclass(frozen=True)
 class Result:
     aggregate: pl.DataFrame
-    rejects: pl.DataFrame
+    excluded: pl.DataFrame  # karanténa i storna, rozlišené v `reject_reason`
     metrics: dict
 
 
@@ -62,13 +62,16 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
     )
 
     # Řádek může porušit víc pravidel; štítek dostane první podle pořadí v `rules`.
+    # Karanténa i storno berou celý řádek, takže soutěží o tentýž štítek -- a pořadí
+    # rozhoduje správně: storno jízdy z prosince je `out_of_month`, do refunds tohohle
+    # měsíce nepatří o nic víc než ta jízda sama.
     reason = pl.lit(None, dtype=pl.String)
-    for rule in reversed([r for r in rules if r.action == "reject"]):
+    for rule in reversed([r for r in rules if r.action in ROW_ACTIONS]):
         reason = pl.when(pl.col(f"v_{rule.name}")).then(pl.lit(rule.name)).otherwise(reason)
     flagged = flagged.with_columns(reject_reason=reason)
 
     nulled_by: dict[str, list[str]] = {}
-    for rule in (r for r in rules if r.action != "reject"):
+    for rule in (r for r in rules if r.action not in NO_ROW_ACTIONS):
         nulled_by.setdefault(rule.action, []).append(f"v_{rule.name}")
     flagged = flagged.with_columns(
         [
@@ -79,11 +82,14 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
 
     frame = flagged.collect()  # jediný collect
 
+    reversal_rules = [r.name for r in rules if r.action == REVERSAL]
     published = frame.filter(pl.col("reject_reason").is_null())
-    rejects = frame.filter(pl.col("reject_reason").is_not_null())
+    excluded = frame.filter(pl.col("reject_reason").is_not_null())
+    reversals = excluded.filter(pl.col("reject_reason").is_in(reversal_rules))
+    rejects = excluded.filter(~pl.col("reject_reason").is_in(reversal_rules))
 
     aggregate = _aggregate(published).join(
-        _refunds(rejects), on=["date", "location_id"], how="full", coalesce=True
+        _refunds(reversals), on=["date", "location_id"], how="full", coalesce=True
     )
     aggregate = aggregate.with_columns(
         pl.col("trips", "distance_obs", "duration_obs", "fare_obs").fill_null(0),
@@ -104,6 +110,7 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
         "rows": {
             "input": frame.height,
             "published": published.height,
+            "reversed": reversals.height,
             "rejected": rejects.height,
             "output": aggregate.height,
         },
@@ -114,7 +121,7 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
         },
     }
     return Result(
-        aggregate=aggregate, rejects=rejects.select(NEEDED + ["reject_reason"]), metrics=metrics
+        aggregate=aggregate, excluded=excluded.select(NEEDED + ["reject_reason"]), metrics=metrics
     )
 
 
@@ -138,17 +145,13 @@ def _aggregate(published: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def _refunds(rejects: pl.DataFrame) -> pl.DataFrame:
-    """Storna nezmizí v karanténě: jejich objem se vykazuje zvlášť, hrubá tržba zůstává
-    hrubá. Jízdy mimo zpracovávaný měsíc do partition nepatří vůbec."""
-    return (
-        rejects.filter(pl.col("reject_reason") == "nonpositive_total")
-        .group_by(
-            pl.col("tpep_pickup_datetime").dt.date().alias("date"),
-            pl.col("PULocationID").cast(pl.Int32).alias("location_id"),
-        )
-        .agg(refunds_usd=pl.col("total_amount").sum().round(2))
-    )
+def _refunds(reversals: pl.DataFrame) -> pl.DataFrame:
+    """Objem storn na den a zónu. Hrubá tržba zůstává hrubá, rozklad je v obou
+    sloupcích -- kdo chce vykazované číslo, bere net_revenue_usd."""
+    return reversals.group_by(
+        pl.col("tpep_pickup_datetime").dt.date().alias("date"),
+        pl.col("PULocationID").cast(pl.Int32).alias("location_id"),
+    ).agg(refunds_usd=pl.col("total_amount").sum().round(2))
 
 
 def _zones(zones: pl.LazyFrame) -> pl.DataFrame:

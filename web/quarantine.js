@@ -11,13 +11,18 @@ const LATEST = MONTHS.map((m) => m.runs[0]);
 const APPLIED = LATEST[LATEST.length - 1].thresholds_applied || {};
 const INPUT = LATEST.reduce((a, r) => a + r.rows.input, 0);
 const REJECTED = LATEST.reduce((a, r) => a + r.rows.rejected, 0);
+const reversedOf = (run) => run.rows.reversed || 0;
+const REVERSED = LATEST.reduce((a, r) => a + reversedOf(r), 0);
+// Starší manifesty storna neznaly a build je dopočítal; stránka to musí přiznat, protože
+// v nich nejde oddělit jízdy s nulovou tržbou od skutečných protizápisů.
+const ESTIMATED = LATEST.filter((r) => r.reversals_estimated).length;
 
-// Pravidla, která odmítají celý řádek. Odvozuje se ze sdíleného slovníku důsledků, ne
+// Pravidla, která berou celý řádek. Odvozuje se ze sdíleného slovníku důsledků, ne
 // z druhého seznamu jmen -- jinak by přibylo pravidlo a stránka o něm mlčela.
-const QUARANTINE_RULES = Object.keys(RULE_EFFECT).filter((n) => RULE_EFFECT[n] === "karanténa");
-// Pořadí ve stohu i v legendě. Nekladná částka je o tři řády častější, patří dolů.
-const STACK_ORDER = ["nonpositive_total", "out_of_month"];
-const STACK_FILL = { nonpositive_total: "var(--s2)", out_of_month: "var(--s3)" };
+const ROW_RULES = Object.keys(RULE_EFFECT).filter((n) => ROW_EFFECTS.includes(RULE_EFFECT[n]));
+// Pořadí ve stohu i v legendě. Storna jsou o tři řády častější, patří dolů.
+const STACK_ORDER = ["reversal", "out_of_month"];
+const STACK_FILL = { reversal: "var(--s2)", out_of_month: "var(--s3)" };
 
 const ruleCount = (run, name) => run.rules[name] || 0;
 const nulledCount = (run, column) => run.nulled[column] || 0;
@@ -105,11 +110,12 @@ function stackCols() {
       year: m.year,
       month: m.month,
       label: label(m),
-      total: share(run.rows.rejected, run.rows.input) || 0,
+      total: share(reversedOf(run) + run.rows.rejected, run.rows.input) || 0,
       parts,
       tip:
-        `v karanténě ${nf.format(run.rows.rejected)} z ${nf.format(run.rows.input)} řádků`
-        + `<br>${rows}<br><span class="r">${pct2(share(run.rows.rejected, run.rows.input) || 0)} vstupu · práh ${pct(CFG.max_reject_ratio)}</span>`,
+        `mimo výstup ${nf.format(reversedOf(run) + run.rows.rejected)} z ${nf.format(run.rows.input)} řádků`
+        + `<br>${rows}<br><span class="r">storna ${pct2(share(reversedOf(run), run.rows.input) || 0)} (práh ${pct(CFG.max_reversal_ratio)})`
+        + ` · karanténa ${pct2(share(run.rows.rejected, run.rows.input) || 0)} (práh ${pct(CFG.max_reject_ratio)})</span>`,
     };
   });
 }
@@ -122,22 +128,27 @@ function stackCols() {
 function drawFunnel(host, run) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
   const H = 92;
-  const { svg, width } = svgRoot(host, H, "Vstupní řádky rozdělené na zveřejněné a v karanténě");
+  const { svg, width } = svgRoot(host, H, "Vstupní řádky rozdělené na zveřejněné, stornované a v karanténě");
   const pad = 2;
   const inner = width - pad * 2;
   const total = run.rows.input;
+  const reversed = reversedOf(run);
   const pubW = (run.rows.published / total) * inner - 1;
+  const revW = (reversed / total) * inner - 1;
   const rejW = (run.rows.rejected / total) * inner - 1;
   const y = 30;
   const h = 26;
 
   svg.appendChild(el("path", { d: barPath(pad, y, pubW, h, 0), fill: "var(--s1)" }));
-  svg.appendChild(el("path", { d: barPath(pad + pubW + 2, y, rejW, h, 4), fill: "var(--s2)" }));
+  // Storna mají vlastní segment, ne díl karantény: berou celý řádek stejně, ale jsou to
+  // protizápisy k odjetým jízdám, ne vadná data.
+  if (revW > 0) svg.appendChild(el("path", { d: barPath(pad + pubW + 2, y, revW, h, 0), fill: "var(--s2)" }));
+  svg.appendChild(el("path", { d: barPath(pad + pubW + Math.max(revW + 2, 0) + 2, y, rejW, h, 4), fill: "var(--s3)" }));
 
   svg.append(
     el("text", { x: pad, y: y - 9, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 12, "font-weight": 600 }, nf.format(run.rows.published)),
     el("text", { x: pad, y: y + h + 17, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11 }, nf.format(total) + " vstupních řádků"),
-    el("text", { x: width - pad, y: y - 9, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.rejected) + " (" + pct2(run.rows.rejected / total) + ")"),
+    el("text", { x: width - pad, y: y - 9, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(reversed) + " storn · " + nf.format(run.rows.rejected) + " v karanténě"),
     el("text", { x: width - pad, y: y + h + 17, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.output) + " výstupních řádků")
   );
   host.appendChild(svg);
@@ -151,8 +162,8 @@ function buildMonths() {
     ["num", nf.format(run.rows.input)],
     ["num", nf.format(run.rows.rejected)],
     ["num", pct2(share(run.rows.rejected, run.rows.input) || 0)],
-    ["num", nf.format(ruleCount(run, "out_of_month"))],
-    ["num", nf.format(ruleCount(run, "nonpositive_total"))],
+    ["num", nf.format(reversedOf(run)) + (run.reversals_estimated ? " *" : "")],
+    ["num", pct2(share(reversedOf(run), run.rows.input) || 0)],
     // Storna jsou záporná; znaménko se nechává, protože se od hrubé tržby odečítají.
     ["num", m.refunds ? usdCompact(m.refunds) : "—"],
     ["num", nf.format(nulledCount(run, "trip_distance"))],
@@ -172,8 +183,8 @@ function buildMonths() {
     <td class="num">${nf.format(INPUT)}</td>
     <td class="num">${nf.format(REJECTED)}</td>
     <td class="num">${pct2(share(REJECTED, INPUT) || 0)}</td>
-    <td class="num">${nf.format(total((r) => ruleCount(r, "out_of_month")))}</td>
-    <td class="num">${nf.format(total((r) => ruleCount(r, "nonpositive_total")))}</td>
+    <td class="num">${nf.format(REVERSED)}</td>
+    <td class="num">${pct2(share(REVERSED, INPUT) || 0)}</td>
     <td class="num">${refunds ? usdCompact(refunds) : "—"}</td>
     <td class="num">${nf.format(total((r) => nulledCount(r, "trip_distance")))}</td>
     <td class="num">${nf.format(total((r) => nulledCount(r, "duration_min")))}</td>
@@ -182,7 +193,8 @@ function buildMonths() {
 
   document.getElementById("months-foot").textContent =
     plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN
-    + " · nejnovější manifest z každé partition";
+    + " · nejnovější manifest z každé partition"
+    + (ESTIMATED ? " · * storna dopočítaná ze staršího manifestu, viz poznámka níž" : "");
 
   document.querySelectorAll("#months tr").forEach((tr) => {
     const pick = () => select(tr.dataset.key);
@@ -204,15 +216,27 @@ function buildHeader() {
     { value: 0, key: MONTHS[0].key }
   );
 
+  const worstReversal = MONTHS.reduce(
+    (best, m, i) => {
+      const value = share(reversedOf(LATEST[i]), LATEST[i].rows.input) || 0;
+      return value > best.value ? { value, key: m.key } : best;
+    },
+    { value: 0, key: MONTHS[0].key }
+  );
+
   // Chip nesmí tvrdit "je to v pohodě" nezávisle na datech: měří se skutečná rezerva
   // nejhoršího měsíce proti prahu, a pod polovinou vyčerpané rezervy se to teprve
-  // hlásí jako dobré.
+  // hlásí jako dobré. Karanténa a storna mají vlastní práh, takže i vlastní chip --
+  // sečíst je do jednoho by zpátky svedlo dohromady vadu a obchodní událost.
   const headroom = worst.value / CFG.max_reject_ratio;
+  const revHeadroom = worstReversal.value / CFG.max_reversal_ratio;
   buildChips([
     headroom < 0.5
-      ? { dot: "good", text: "žádný měsíc nevyčerpal ani polovinu rezervy k prahu " + pct(CFG.max_reject_ratio) }
-      : { dot: "warn", text: "nejhorší měsíc vyčerpal " + pct(headroom) + " rezervy k prahu " + pct(CFG.max_reject_ratio) },
-    { dot: "info", text: "nejvyšší podíl: " + worst.key + " (" + pct2(worst.value) + ")" },
+      ? { dot: "good", text: "karanténa: žádný měsíc nevyčerpal ani polovinu rezervy k prahu " + pct(CFG.max_reject_ratio) }
+      : { dot: "warn", text: "karanténa: nejhorší měsíc vyčerpal " + pct(headroom) + " rezervy k prahu " + pct(CFG.max_reject_ratio) },
+    revHeadroom < 0.5
+      ? { dot: "good", text: "storna: žádný měsíc nevyčerpal ani polovinu rezervy k prahu " + pct(CFG.max_reversal_ratio) }
+      : { dot: "warn", text: "storna: nejhorší měsíc vyčerpal " + pct(revHeadroom) + " rezervy k prahu " + pct(CFG.max_reversal_ratio) },
     { dot: "info", text: plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN },
   ]);
 
@@ -221,15 +245,16 @@ function buildHeader() {
 
   buildTiles([
     { k: "Řádky v karanténě", v: nf.format(REJECTED), s: pct2(share(REJECTED, INPUT) || 0) + " z " + nf.format(INPUT) + " vstupních řádků" },
-    { k: "Nejvyšší měsíční podíl", v: pct2(worst.value), s: worst.key + " · práh běhu " + pct(CFG.max_reject_ratio) },
-    { k: "Objem storn", v: refunds ? usdCompact(refunds) : "—", s: "odmítnuté řádky, jejichž peníze se vykazují dál" },
+    { k: "Stornované řádky", v: nf.format(REVERSED), s: pct2(share(REVERSED, INPUT) || 0) + " vstupu · protizápisy, ne vada" },
+    { k: "Objem storn", v: refunds ? usdCompact(refunds) : "—", s: "odečteno od hrubé tržby v net_revenue_usd" },
     { k: "Vynulovaná pole", v: nf.format(nulled), s: "hodnota zahozena, řádek i jeho peníze zůstávají" },
   ]);
 
   document.getElementById("reject-limit").textContent = pct(CFG.max_reject_ratio) + " vstupních řádků";
+  document.getElementById("reversal-limit").textContent = pct(CFG.max_reversal_ratio) + " vstupních řádků";
 
   document.getElementById("spec-keep").innerHTML = [
-    ["Odmítnuté řádky", "rejects/…/rejects.parquet"],
+    ["Vyřazené řádky", "rejects/…/rejects.parquet"],
     ["Důvod u každého řádku", "reject_reason"],
     ["Sloupce, které si nesou", "6 zdrojových + důvod"],
     ["Objem storn v curated", "refunds_usd"],
@@ -238,7 +263,7 @@ function buildHeader() {
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 
   document.getElementById("stack-cap").textContent =
-    "Podíl odmítnutých řádků na zdrojových, " + SPAN + ". Kliknutím na sloupec se níž načte rozpis toho měsíce.";
+    "Podíl řádků mimo výstup na zdrojových, " + SPAN + ". Kliknutím na sloupec se níž načte rozpis toho měsíce.";
 
   document.getElementById("stack-legend").innerHTML = STACK_ORDER.map(
     (name) => `<span><i class="swatch" style="background:${STACK_FILL[name]}"></i>${ruleLabel(name, APPLIED)}</span>`
@@ -258,7 +283,7 @@ function render() {
   document.querySelectorAll("#months tr").forEach((tr) => tr.classList.toggle("on", tr.dataset.key === current));
 
   drawStack(document.getElementById("stack"), stackCols(), {
-    title: "Podíl odmítnutých řádků po měsících, rozpad podle důvodu",
+    title: "Podíl řádků mimo výstup po měsících, rozpad na storna a karanténu",
     fmt: pct2,
   });
 
@@ -270,11 +295,11 @@ function render() {
   const applied = run.thresholds_applied || {};
   const rows = Object.entries(run.rules).sort((a, b) => b[1] - a[1]);
   document.getElementById("rules").innerHTML = rows.map(([name, count]) => {
-    const quarantine = RULE_EFFECT[name] === "karanténa";
+    const wholeRow = ROW_EFFECTS.includes(RULE_EFFECT[name]);
     return `<tr>
       <td class="wrap">${ruleLabel(name, applied)}<br><span class="mono" style="color:var(--ink-3)">${name}</span></td>
       <td class="wrap"><span class="tag">${RULE_EFFECT[name] || "—"}</span></td>
-      <td class="mono">${quarantine ? "celý řádek" : RULE_FIELD[name] || "—"}</td>
+      <td class="mono">${wholeRow ? "celý řádek" : RULE_FIELD[name] || "—"}</td>
       <td class="num">${nf.format(count)}</td>
       <td class="num" style="color:var(--ink-2)">${count ? pct2(count / run.rows.input) : "—"}</td>
     </tr>`;
@@ -284,17 +309,20 @@ function render() {
     label(m) + " — " + nf.format(run.rows.input) + " posouzených zdrojových řádků. Počítá se"
     + " nezávisle: jeden řádek může porušit několik pravidel naráz.";
 
-  // Kolik řádků porušilo obě odmítací pravidla zároveň. Manifest to přímo nenese, ale
-  // plyne to z rozdílu: součet dotčených minus ti, co doopravdy skončili v karanténě.
-  const flagged = QUARANTINE_RULES.reduce((a, name) => a + ruleCount(run, name), 0);
-  const overlap = flagged - run.rows.rejected;
+  // Kolik řádků porušilo obě pravidla na celý řádek zároveň. Manifest to přímo nenese,
+  // ale plyne to z rozdílu: součet dotčených minus ti, co doopravdy z výstupu vypadli.
+  const flagged = ROW_RULES.reduce((a, name) => a + ruleCount(run, name), 0);
+  const removed = reversedOf(run) + run.rows.rejected;
+  const overlap = flagged - removed;
   document.getElementById("overlap").innerHTML = overlap > 0
-    ? `Odmítací pravidla se dotkla ${nf.format(flagged)} řádků, v karanténě jich je `
-      + `${nf.format(run.rows.rejected)}: ${plural(overlap, "řádek", "řádky", "řádků")} porušil`
+    ? `Pravidla na celý řádek se dotkla ${nf.format(flagged)} řádků, z výstupu jich vypadlo `
+      + `${nf.format(removed)}: ${plural(overlap, "řádek", "řádky", "řádků")} porušil`
       + `${overlap === 1 ? "" : "y"} obě naráz a počítá se jednou. Štítek `
-      + `<code>reject_reason</code> takový řádek dostane podle pořadí pravidel, od nejvzácnějšího.`
-    : `Odmítací pravidla se dotkla ${nf.format(flagged)} řádků a přesně tolik jich je `
-      + `v karanténě — v tomhle měsíci žádný řádek neporušil obě naráz.`;
+      + `<code>reject_reason</code> takový řádek dostane podle pořadí pravidel, od nejvzácnějšího `
+      + `— stornovaná jízda z jiného měsíce je tedy <em>mimo měsíc</em>, a do storn tohohle `
+      + `měsíce se nezapočítá.`
+    : `Pravidla na celý řádek se dotkla ${nf.format(flagged)} řádků a přesně tolik jich `
+      + `z výstupu vypadlo — v tomhle měsíci žádný řádek neporušil obě naráz.`;
 }
 
 buildHeader();

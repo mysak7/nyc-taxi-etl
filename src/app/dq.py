@@ -1,8 +1,8 @@
 """Pravidla jako data. Dvě severity:
 
 ERROR  = kontrakt schématu -> tvrdý pád před transformací (porucha, ne šum).
-QUALITY = kvalita řádku -> buď karanténa (není účtenka), nebo vynulování vadného
-          pole (řádek i jeho peníze zůstávají).
+QUALITY = kvalita řádku -> karanténa, storno, nebo vynulování vadného pole (řádek
+          i jeho peníze zůstávají).
 """
 
 from __future__ import annotations
@@ -53,11 +53,22 @@ BASELINE_COLUMNS = frozenset(
 )
 
 
+# Co pravidlo s řádkem udělá. REJECT i REVERSAL berou celý řádek z publikovaného
+# výstupu, ale znamenají opak: REJECT je "tomuhle řádku nevěřím", REVERSAL je "tomuhle
+# řádku věřím, jenom to není jízda". Proto je gate nesmí měřit stejným prahem -- podíl
+# storn je vlastnost trhu, ne kvality dat.
+REJECT = "reject"
+REVERSAL = "reversal"
+OBSERVE = "observe"  # jen se spočítá do manifestu, na řádek nesahá
+ROW_ACTIONS = frozenset({REJECT, REVERSAL})
+NO_ROW_ACTIONS = ROW_ACTIONS | {OBSERVE}
+
+
 @dataclass(frozen=True)
 class Rule:
     name: str
     expr: pl.Expr  # True = porušeno
-    action: str  # "reject" nebo jméno sloupce, který se vynuluje
+    action: str  # REJECT / REVERSAL / OBSERVE, nebo jméno sloupce, který se vynuluje
 
 
 def check_contract(schema: dict[str, pl.DataType]) -> dict:
@@ -94,7 +105,7 @@ def rules(cfg: Config, year: int, month: int) -> list[Rule]:
     return [
         # Není kvalita, ale partitioning: lednový soubor obsahuje 22 jízd z prosince
         # a února. Jedna partition = jeden zdrojový měsíc (idempotence přepisu).
-        Rule("out_of_month", (pickup < start) | (pickup >= end), "reject"),
+        Rule("out_of_month", (pickup < start) | (pickup >= end), REJECT),
         Rule(
             "implausible_distance", pl.col("trip_distance") > cfg.max_distance_mi, "trip_distance"
         ),
@@ -112,8 +123,18 @@ def rules(cfg: Config, year: int, month: int) -> list[Rule]:
         # Záporné jízdné u zaplacené jízdy je rozbité pole, ne fiktivní jízda.
         Rule("negative_fare", pl.col("fare_amount") < 0, "fare_amount"),
         Rule("zero_distance", pl.col("trip_distance") <= 0, "trip_distance"),
-        # Není účtenka -> nic nepřiteklo. Storna se vykazují v refunds_usd.
-        Rule("nonpositive_total", pl.col("total_amount") <= 0, "reject"),
+        # Nula není storno: jízda se odjela, jen se za ni nevybralo (payment_type 3).
+        # V 2025-01 jich je 559, z toho 511 od VendorID 1 -- to je jeho způsob, jak
+        # říct totéž, co Vendor 2 říká protizápisem. Zůstávají v `trips` s nulovou
+        # tržbou, počítají se jen kvůli viditelnosti.
+        Rule("zero_total", pl.col("total_amount") == 0, OBSERVE),
+        # Záporný řádek není vada, je to protizápis ke konkrétní jízdě: v 2025-01 má
+        # 82 % z nich zrcadlový kladný řádek se shodným časem, zónami, vzdáleností
+        # i počtem cestujících a všech osm peněžních sloupců páru se sečte přesně na
+        # nulu. Feed k TLC je append-only, dispute přijde dny po jízdě -- stornovat
+        # jde jedině dobropisem. Jízda to není (jinak by se počítala dvakrát), peníze
+        # ano: jdou do refunds_usd a net_revenue_usd je odečte.
+        Rule("reversal", pl.col("total_amount") < 0, REVERSAL),
     ]
 
 
@@ -126,6 +147,13 @@ def gate(metrics: dict, cfg: Config, previous_input_rows: int | None) -> None:
     ratio = rows["rejected"] / rows["input"]
     if ratio > cfg.max_reject_ratio:
         raise DataQualityError(f"karanténa {ratio:.2%} > práh {cfg.max_reject_ratio:.0%}")
+
+    # Vlastní práh, ne rozpočet karantény: storna hlásí jediný dodavatel a jejich podíl
+    # se hýbe s vendor mixem. Kdyby se počítala do karantény, gate by padal na tom, že
+    # se lidem víc reklamovaly jízdy -- a zbytek prahu by ujídala normální provozní věc.
+    reversed_ratio = rows["reversed"] / rows["input"]
+    if reversed_ratio > cfg.max_reversal_ratio:
+        raise DataQualityError(f"storna {reversed_ratio:.2%} > práh {cfg.max_reversal_ratio:.0%}")
 
     for column, threshold in (
         ("trip_distance", cfg.max_null_ratio_distance),

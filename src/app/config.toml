@@ -33,9 +33,19 @@ max_distance_mi = 300.0
 # nad 480 min zbývají 3. Objem záchytu to nemění: 1203 -> 1135 řádků.
 max_duration_min = 480.0
 
-# Tvrdé prahy běhu. Naměřeno: karanténa 1,83 %, největší skok objemu mezi měsíci
-# +21,9 % (29 měsíců), vynulovaná vzdálenost 2,53 %, doba 0,09 %.
-max_reject_ratio = 0.20
+# Tvrdé prahy běhu. Naměřeno: karanténa 0,0006 %, storna 1,81 %, největší skok objemu
+# mezi měsíci +21,9 % (29 měsíců), vynulovaná vzdálenost 2,53 %, doba 0,09 %.
+#
+# Karanténa je od oddělení storn skoro prázdná (22 řádků z 3,48 M = jízdy z prosince
+# a února v lednovém souboru). Práh 0,20 dával smysl, dokud v ní ležela 1,83 % storn;
+# teď by neznamenal nic. 0,05 je pořád 80x nad naměřeným, ale spadne dřív, než by
+# rozbité `tpep_pickup_datetime` odneslo půlku měsíce. POZOR: naměřeno jen na 2025-01,
+# ostatní měsíce lokálně nejsou -- po prvním backfillu přes historii přeměřit.
+max_reject_ratio = 0.05
+# Storna: 1,81 % celkem, ale 2,32 % uvnitř Vendora 2, který je jako jediný posílá.
+# Práh sedí na vendor mixu, ne na kvalitě dat -- 0,08 unese i to, že Vendor 2 pobere
+# celý trh, a pořád chytne skok, který by znamenal změnu praxe u dodavatele.
+max_reversal_ratio = 0.08
 max_volume_delta = 0.40
 max_null_ratio_distance = 0.10
 max_null_ratio_duration = 0.05

@@ -7,24 +7,28 @@ function drawFunnel(host, m) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
   const run = m.runs[0];
   const H = 92;
-  const { svg, width } = svgRoot(host, H, "Vstupní řádky rozdělené na zveřejněné a v karanténě");
+  const { svg, width } = svgRoot(host, H, "Vstupní řádky rozdělené na zveřejněné, stornované a v karanténě");
   const pad = 2;
   const inner = width - pad * 2;
   const total = run.rows.input;
+  const reversed = run.rows.reversed || 0;
   const pubW = (run.rows.published / total) * inner - 1;
+  const revW = (reversed / total) * inner - 1;
   const rejW = (run.rows.rejected / total) * inner - 1;
   const y = 30;
   const h = 26;
 
   svg.appendChild(el("path", { d: barPath(pad, y, pubW, h, 0), fill: "var(--s1)" }));
-  // Segmenty odděluje 2px mezera v barvě podkladu, ne obrys.
-  svg.appendChild(el("path", { d: barPath(pad + pubW + 2, y, rejW, h, 4), fill: "var(--s2)" }));
+  // Segmenty odděluje 2px mezera v barvě podkladu, ne obrys. Storna jsou vlastní
+  // segment: berou celý řádek jako karanténa, ale vadná data to nejsou.
+  if (revW > 0) svg.appendChild(el("path", { d: barPath(pad + pubW + 2, y, revW, h, 0), fill: "var(--s2)" }));
+  svg.appendChild(el("path", { d: barPath(pad + pubW + Math.max(revW + 2, 0) + 2, y, rejW, h, 4), fill: "var(--s3)" }));
 
-  const share = ((run.rows.rejected / total) * 100).toFixed(2);
+  const share = (((reversed + run.rows.rejected) / total) * 100).toFixed(2);
   svg.append(
     el("text", { x: pad, y: y - 9, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 12, "font-weight": 600 }, nf.format(run.rows.published)),
     el("text", { x: pad, y: y + h + 17, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11 }, nf.format(total) + " vstupních řádků"),
-    el("text", { x: width - pad, y: y - 9, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.rejected) + " (" + share + " %)"),
+    el("text", { x: width - pad, y: y - 9, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(reversed + run.rows.rejected) + " (" + share + " %)"),
     el("text", { x: width - pad, y: y + h + 17, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.output) + " výstupních řádků")
   );
   host.appendChild(svg);
@@ -53,11 +57,12 @@ function buildHeader() {
   const latest = MONTHS.map((m) => m.runs[0]);
   const inputRows = latest.reduce((a, r) => a + r.rows.input, 0);
   const rejected = latest.reduce((a, r) => a + r.rows.rejected, 0);
+  const reversed = latest.reduce((a, r) => a + (r.rows.reversed || 0), 0);
   const slowest = Math.max(...runs.map((r) => r.timing.seconds));
 
   buildTiles([
     { k: "Přečtené zdrojové řádky", v: nf.format(Math.round(inputRows / 1e6)) + " mil.", s: "→ " + nf.format(rows) + " výstupních řádků" },
-    { k: "V karanténě", v: pct(rejected / inputRows), s: nf.format(rejected) + " řádků, ponechaných s důvodem" },
+    { k: "V karanténě", v: pct(rejected / inputRows), s: nf.format(rejected) + " řádků · " + nf.format(reversed) + " dalších je storno, ne vada" },
     { k: "Manifesty", v: nf.format(runs.length), s: plural(runs.length, "běh", "běhy", "běhů") + " přes " + plural(MONTHS.length, "partition") },
     { k: "Nejpomalejší běh", v: nf1.format(slowest) + " s", s: "jeden zdrojový měsíc, souběžnost map 2" },
   ]);
@@ -79,6 +84,7 @@ function buildHeader() {
 
   specRows("spec-dq", [
     ["Podíl karantény", "padá nad " + CFG.max_reject_ratio * 100 + " %"],
+    ["Podíl storn", "padá nad " + CFG.max_reversal_ratio * 100 + " %"],
     ["Objem proti předchozímu měsíci", "padá nad ±" + CFG.max_volume_delta * 100 + " %"],
     ["Vynulovaná vzdálenost", "padá nad " + CFG.max_null_ratio_distance * 100 + " %"],
     ["Vynulovaná doba jízdy", "padá nad " + CFG.max_null_ratio_duration * 100 + " %"],
@@ -104,6 +110,7 @@ function buildRuns() {
       <td class="mono">${r.run_id.slice(0, 8)}</td>
       <td class="num">${nf.format(r.rows.input)}</td>
       <td class="num">${nf.format(r.rows.published)}</td>
+      <td class="num">${nf.format(r.rows.reversed || 0)}</td>
       <td class="num">${nf.format(r.rows.rejected)}</td>
       <td class="num">${nf.format(r.rows.output)}</td>
       <td class="num">${nf1.format(r.timing.seconds)} s</td>

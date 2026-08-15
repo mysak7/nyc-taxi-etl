@@ -65,7 +65,7 @@ def test_realny_vzorek_drzi_invarianty(cfg, sample, year, month):
     result = transform(pl.scan_parquet(sample), pl.scan_csv(ZONES), dq.rules(cfg, year, month))
     rows, aggregate = result.metrics["rows"], result.aggregate
 
-    assert rows["published"] + rows["rejected"] == rows["input"]
+    assert rows["published"] + rows["reversed"] + rows["rejected"] == rows["input"]
     assert aggregate.height > 0
     assert aggregate["yellow_revenue_usd"].is_finite().all()
     assert aggregate["borough"].null_count() == 0  # každé location_id se dojoinovalo

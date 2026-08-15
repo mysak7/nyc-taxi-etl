@@ -115,6 +115,7 @@
           <th>Běh</th>
           <th class="num">Vstupní řádky</th>
           <th class="num">Zveřejněno</th>
+          <th class="num">Storna</th>
           <th class="num">V karanténě</th>
           <th class="num">Výstup</th>
           <th class="num">Čas</th>
@@ -142,7 +143,8 @@
     <p class="cap" id="funnel-cap"></p>
     <div class="legend">
       <span><i class="swatch" style="background:var(--s1)"></i>zveřejněno</span>
-      <span><i class="swatch" style="background:var(--s2)"></i>v karanténě</span>
+      <span><i class="swatch" style="background:var(--s2)"></i>storna</span>
+      <span><i class="swatch" style="background:var(--s3)"></i>v karanténě</span>
     </div>
     <div class="plot" id="funnel"></div>
   </div>
@@ -157,7 +159,9 @@
     <h3>Odmítnuté řádky si nesou svůj důvod</h3>
     <p class="cap">Nic se nemaže. Co pravidlo odmítne, přistane v Parquetu odmítnutých vedle výstupu.</p>
     <p class="note">
-      Do karantény jde řádek jen tehdy, když z něj neplyne žádná kladná útrata. Špatná
+      Do karantény jde řádek jen tehdy, když nepatří do zpracovávaného měsíce — jinak
+      řečeno skoro nikdy. Záporná útrata bere celý řádek taky, ale je to storno, ne vada:
+      počítá se zvlášť a jeho peníze se vykazují v <code>refunds_usd</code>. Špatná
       <em>hodnota</em> se vynuluje a vypadne ze svého vlastního průměru, ale nezahazuje se
       ani řádek, ani jeho peníze. Proti čemu se to rozhodnutí měřilo a co by zahazování
       celých řádků stálo, je na <a href="method.html">metodické stránce</a>; co přesně

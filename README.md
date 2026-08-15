@@ -79,10 +79,19 @@ Každé je podložené měřením na skutečných datech, ne odhadem.
   z prosince a února. Partitioning podle `pickup_date` by rozbil atomicitu přepisu.
   Jedna partition = **jeden soubor** → přepis je `os.replace` lokálně a jedno `PUT` na S3,
   takže nikdy nevznikne partition se soubory ze dvou verzí zdroje.
-- **Účtenka je fakt, měření jsou atributy.** Do karantény jde řádek jen když z něj neplyne
-  kladná útrata (1,83 %). Vadná *hodnota* se nuluje a nezapočítá se do svého průměru, ale
-  řádek ani jeho peníze nevyhazuje: vyhazování celých řádků by stálo **2,32 mil. USD tržeb
-  a 88 743 jízd** a průměrnou vzdálenost by změnilo o **0,1 %** (3,166 vs 3,169 mil).
+- **Účtenka je fakt, měření jsou atributy.** Vadná *hodnota* se nuluje a nezapočítá se do
+  svého průměru, ale řádek ani jeho peníze nevyhazuje: vyhazování celých řádků by stálo
+  **2,32 mil. USD tržeb a 88 743 jízd** a průměrnou vzdálenost by změnilo o **0,1 %**
+  (3,166 vs 3,169 mil).
+- **Storno není vada.** Záporný řádek je protizápis ke konkrétní jízdě, ne rozbité pole:
+  82 % z nich má v 2025-01 zrcadlový kladný řádek se shodným časem, zónami, vzdáleností
+  i počtem cestujících a všech osm peněžních sloupců páru se sečte přesně na nulu. Feed
+  k TLC je append-only a dispute přijde dny po jízdě, takže stornovat jde jedině
+  dobropisem. Z `trips` proto vypadne (jinak by se ta původní započítala dvakrát), ale má
+  **vlastní práh** (`max_reversal_ratio`), ne rozpočet karantény — podíl storn je vlastnost
+  vendor mixu, ne kvality dat. Posílá je jediný dodavatel: všech 63 037 storn 2025-01 je od
+  `VendorID 2`, `VendorID 1` nemá se 754 tisíci jízdami ani jedno. `refunds_usd` tedy měří
+  storna Vendora 2, ne storna v New Yorku.
 - **Každý průměr nese svůj jmenovatel.** Globálně má vzdálenost jmenovatel 97,5 %, ale
   Newark Airport 3. 1. 2025 má 28 jízd a **jediné použitelné měření vzdálenosti**. Jedno
   globální číslo v reportu by tohle nepopsalo, proto `*_obs` sloupce ve výstupu.
@@ -106,7 +115,7 @@ Každé je podložené měřením na skutečných datech, ne odhadem.
 
 Vlastní deklarativní pravidla ([`src/app/dq.py`](src/app/dq.py)), žádná další závislost.
 Dvě severity: **kontrakt schématu** padá tvrdě *před* transformací, **kvalita řádku** jde
-do karantény nebo vynuluje pole.
+do karantény, označí se za storno, nebo vynuluje pole.
 
 Kontrakt je „povinný sloupec existuje a je toho druhu", ne „schéma se rovná" — drift je
 doložený: `cbd_congestion_fee` v 2024-01 chybí, od 2025-01 je (19 → 20 sloupců). Nový
@@ -116,8 +125,9 @@ Naměřeno na 2025-01 (3 475 226 řádků), prahy mají rezervu z měření:
 
 | pravidlo | řádků | co se stane | práh |
 |---|---|---|---|
-| `total_amount <= 0` | 63 596 (1,83 %) | karanténa; objem do `refunds_usd` a odečtený v `net_revenue_usd` | karanténa > 20 % → fail |
-| pickup mimo měsíc | 22 | karanténa (partitioning) | |
+| `total_amount < 0` | 63 037 (1,81 %) | storno; z `trips` ven, objem do `refunds_usd` a odečtený v `net_revenue_usd` | storna > 8 % → fail |
+| `total_amount == 0` | 559 | nic, jen se počítá — jízda se odjela, jen se za ni nevybralo | |
+| pickup mimo měsíc | 22 (0,0006 %) | karanténa (partitioning) | karanténa > 5 % → fail |
 | `fare_amount < 0` | 144 118 | vynulovat `fare_amount` | |
 | `trip_distance <= 0` / `> 300 mi` | 90 893 / 118 | vynulovat `trip_distance` | > 10 % → fail |
 | rychlost `> 100 mph` | 254 | vynulovat `trip_distance` | (týž práh) |
@@ -260,14 +270,15 @@ mapped tasky. Spark by na tomhle objemu byl dekorace, která zdraží provoz i o
   v [`infra/main.tf`](infra/main.tf) připravený zakomentovaný.
 - **Odchozí provoz Lambdy není omezený na CloudFront.** Bez VPC to nejde a VPC by přidala
   NAT a security groupu — víc povrchu než užitku pro funkci, která volá jednu doménu.
-- **Karanténa vyřazuje celý řádek**, takže storno vypadne i z `trips`. Objem storn je proto
-  ve výstupu zvlášť (`refunds_usd`) a rovnou i odečtený (`net_revenue_usd`) — jen hrubé
-  číslo by tržbu přeceňovalo o 1,83 % (2025-01: 90,66 mil. $ hrubě, 1,66 mil. $ storna).
-  Storno se přitom účtuje na svůj vlastní den a zónu, ne na den původní jízdy; přes den
-  to nevadí (podíl storen je 1,5–2,0 % každý den měsíce, jediná výjimka je 1. leden se
-  3,8 %), na úrovni den × zóna ano — ve 14 z 7 290 řádků 2025-01 je čistá tržba záporná,
-  v 8 z nich dokonce bez jediné jízdy. Proto zůstávají v curated všechny tři sloupce:
-  rozklad si každý spočítá zpátky.
+- **Storno vypadá z `trips`**, protože protizápis není jízda. Objem storn je proto ve
+  výstupu zvlášť (`refunds_usd`) a rovnou i odečtený (`net_revenue_usd`) — jen hrubé číslo
+  by tržbu přeceňovalo o 1,81 % (2025-01: 90,66 mil. $ hrubě, 1,66 mil. $ storna). Odečítat
+  se dá, protože storna jdou pravidelně: 1,5–2,0 % objemu každý den měsíce, jediná výjimka
+  je 1. leden se 3,8 %. Protizápis nese časy a zóny původní jízdy, takže padne na její den
+  × zónu; problém dělá zbylých 18 % bez páru (jízda z prosince nebo taková, kterou zdroj
+  nikdy nezveřejnil) — ve 14 z 7 290 řádků 2025-01 je čistá tržba záporná, v 8 z nich
+  dokonce bez jediné jízdy. Proto zůstávají v curated všechny tři sloupce: rozklad si každý
+  spočítá zpátky.
 - **`passenger_count` není ve výstupu** (NULL u 15,5 % řádků, Flex Fare). Pravidla mají
   chránit publikované metriky, ne pokrývat „co je v datech divné" — zahodit kvůli němu 540
   tisíc jízd by byla chyba.
@@ -312,6 +323,6 @@ běhu pipeline, ne jen při pushi.
 
 Fixture testy tvrdí **přesná** čísla spočítaná ručně (spadnou-li po změně logiky, je to
 jejich účel), testy nad reálným vzorkem netvrdí žádné konkrétní číslo, jen invarianty
-(`karanténa + publikované = vstup`, každé `location_id` se dojoinovalo). Vzorky v repu
+(`karanténa + storna + publikované = vstup`, každé `location_id` se dojoinovalo). Vzorky v repu
 vyrobí [`tests/data/make_sample.py`](tests/data/make_sample.py) — jsou vybrané tak, aby
 obsahovaly patologie, ne prvních N řádků.

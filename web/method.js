@@ -69,6 +69,7 @@ function worstOf(pick) {
 
 function gates() {
   const reject = worstOf((r) => r.rows.rejected / r.rows.input);
+  const reversal = worstOf((r) => (r.rows.reversed || 0) / r.rows.input);
   const dist = worstOf((r) => (r.nulled.trip_distance || 0) / r.rows.input);
   const dur = worstOf((r) => (r.nulled.duration_min || 0) / r.rows.input);
   // Objem se porovnává s předchozím měsícem, takže první měsíc žádnou změnu nemá.
@@ -85,6 +86,7 @@ function gates() {
 
   const rows = [
     asPct(reject, "Řádky v karanténě", CFG.max_reject_ratio),
+    asPct(reversal, "Stornované řádky", CFG.max_reversal_ratio),
     asPct(dist, "Vynulovaná vzdálenost", CFG.max_null_ratio_distance),
     asPct(dur, "Vynulovaná doba jízdy", CFG.max_null_ratio_duration),
   ];
@@ -112,7 +114,8 @@ const THRESHOLD_TEXT = {
   nonpositive_duration: () => "≤ 0 min",
   zero_distance: () => "≤ 0 mi",
   negative_fare: () => "&lt; $0",
-  nonpositive_total: () => "≤ $0",
+  reversal: () => "&lt; $0",
+  zero_total: () => "= $0",
   out_of_month: () => "mimo zdrojový měsíc",
 };
 
@@ -124,12 +127,12 @@ function buildLedger() {
 
   const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
   document.getElementById("ledger").innerHTML = rows.map(([name, count]) => {
-    const quarantine = RULE_EFFECT[name] === "karanténa";
+    const wholeRow = ROW_EFFECTS.includes(RULE_EFFECT[name]);
     return `<tr>
       <td class="wrap">${ruleLabel(name, APPLIED)}<br><span class="mono" style="color:var(--ink-3)">${name}</span></td>
       <td class="mono">${(THRESHOLD_TEXT[name] || (() => "—"))()}</td>
       <td class="wrap"><span class="tag">${RULE_EFFECT[name] || "—"}</span></td>
-      <td class="mono">${quarantine ? "celý řádek" : RULE_FIELD[name] || "—"}</td>
+      <td class="mono">${wholeRow ? "celý řádek" : RULE_FIELD[name] || "—"}</td>
       <td class="num">${nf.format(count)}</td>
       <td class="num" style="color:var(--ink-2)">${nf2.format((count / INPUT) * 100)} %</td>
     </tr>`;
@@ -156,14 +159,16 @@ function buildHeader() {
   ]);
 
   const ruleNames = new Set(LATEST.flatMap((r) => Object.keys(r.rules)));
-  const quarantining = [...ruleNames].filter((n) => RULE_EFFECT[n] === "karanténa").length;
+  const wholeRow = [...ruleNames].filter((n) => ROW_EFFECTS.includes(RULE_EFFECT[n])).length;
   const rejected = sum((r) => r.rows.rejected);
+  const reversed = sum((r) => r.rows.reversed || 0);
   const nulled = sum((r) => Object.values(r.nulled).reduce((a, v) => a + v, 0));
 
   buildTiles([
-    { k: "Platná pravidla", v: nf.format(ruleNames.size), s: quarantining + " odmítá řádek · " + (ruleNames.size - quarantining) + " odmítá jedno pole" },
+    { k: "Platná pravidla", v: nf.format(ruleNames.size), s: wholeRow + " bere celý řádek · " + (ruleNames.size - wholeRow) + " odmítá jedno pole" },
     { k: "Posouzené zdrojové řádky", v: nf1.format(INPUT / 1e6) + " mil.", s: "každý řádek období " + SPAN + " jimi prošel" },
     { k: "Řádky v karanténě", v: pct(rejected / INPUT), s: nf.format(rejected) + " řádků, každý se svým důvodem" },
+    { k: "Stornované řádky", v: pct(reversed / INPUT), s: nf.format(reversed) + " protizápisů, peníze jdou do refunds_usd" },
     { k: "Vynulovaná pole", v: nf.format(nulled), s: "hodnoty zahozeny, řádky i peníze zůstávají" },
   ]);
 

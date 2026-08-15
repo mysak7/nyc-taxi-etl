@@ -1,7 +1,12 @@
 """Fixture tvrdí přesná čísla spočítaná ručně. Spadne-li po změně logiky, je to žádoucí:
 vynutí vědomé potvrzení, že se publikovaná čísla změnila."""
 
+from dataclasses import replace
+
+import pytest
+
 from app import dq
+from app.errors import DataQualityError
 from app.transform import OUTPUT_COLUMNS, transform
 
 
@@ -12,45 +17,47 @@ def result(cfg, trips, zones):
 def test_kazdy_prumer_ma_svuj_jmenovatel(cfg, trips, zones):
     row = result(cfg, trips, zones).aggregate.filter(location_id=100).to_dicts()[0]
 
-    assert row["trips"] == 9  # tři řádky vypadly do karantény, jeden je z jiné zóny
-    # vzdálenost: 2, 4, 3, 5, 2, 220 (nulová, 300 000 mil a 100 mil za 10 minut ne)
+    assert row["trips"] == 10  # storno a prosinec vypadly, jeden řádek je z jiné zóny
+    # vzdálenost: 1, 2, 4, 3, 5, 2, 220 (nulová, 300 000 mil a 100 mil za 10 minut ne)
     assert (row["distance_obs"], row["avg_distance_mi"], row["median_distance_mi"]) == (
-        6,
-        39.333,
-        3.5,
-    )
-    # doba: 10, 20, 15, 30, 10, 10, 240 minut (záporná a 8,5 h se nepočítají)
-    assert (row["duration_obs"], row["avg_duration_min"], row["median_duration_min"]) == (
         7,
-        47.86,
-        15.0,
+        33.857,
+        3.0,
     )
-    # jízdné: 10, 20, 15, 30, 12, 40, 18, 400 -> 545/8; záporné jízdné se nepočítá
-    assert (row["fare_obs"], row["avg_fare_usd"]) == (8, 68.12)
+    # doba: 5, 10, 20, 15, 30, 10, 10, 240 minut (záporná a 8,5 h se nepočítají)
+    assert (row["duration_obs"], row["avg_duration_min"], row["median_duration_min"]) == (
+        8,
+        42.5,
+        12.5,
+    )
+    # jízdné: 0, 10, 20, 15, 30, 12, 40, 18, 400 -> 545/9; záporné jízdné se nepočítá
+    assert (row["fare_obs"], row["avg_fare_usd"]) == (9, 60.56)
 
 
 def test_penize_zustavaji_i_kdyz_je_mereni_rozbite(cfg, trips, zones):
     row = result(cfg, trips, zones).aggregate.filter(location_id=100).to_dicts()[0]
 
-    # 12 + 24 + 18 + 36 + 14 + 50 + 6 + 20 + 420; jízda s rozbitým tachometrem je tržba
+    # 12 + 24 + 18 + 36 + 14 + 50 + 6 + 20 + 420 + 0; jízda s rozbitým tachometrem je
+    # tržba a nezpoplatněná jízda taky, jen nulová
     assert row["yellow_revenue_usd"] == 600.0
-    # storno -5 a nezpoplatněná jízda 0; jízda z prosince se do ledna nepočítá vůbec
+    # jen storno -5: nula se nevrací, ta jízda se odjela; prosinec do ledna nepatří vůbec
     assert row["refunds_usd"] == -5.0
     # čistá tržba je součet obou -- hrubá se nikam neztrácí, jen už není headline
     assert row["net_revenue_usd"] == 595.0
 
 
-def test_karantena_plus_publikovane_je_vstup(cfg, trips, zones):
-    metrics = result(cfg, trips, zones).metrics
+def test_karantena_storna_a_publikovane_je_vstup(cfg, trips, zones):
+    rows = result(cfg, trips, zones).metrics["rows"]
 
-    assert metrics["rows"] == {"input": 13, "published": 10, "rejected": 3, "output": 2}
-    assert metrics["rows"]["published"] + metrics["rows"]["rejected"] == metrics["rows"]["input"]
+    assert rows == {"input": 13, "published": 11, "reversed": 1, "rejected": 1, "output": 2}
+    # Storna se počítají zvlášť od karantény, ale ze vstupu nesmí zmizet ani jedno.
+    assert rows["published"] + rows["reversed"] + rows["rejected"] == rows["input"]
 
 
 def test_pravidla_se_pocitaji_nezavisle_na_poradi(cfg, trips, zones):
     metrics = result(cfg, trips, zones).metrics
 
-    # storno porušuje negative_fare i nonpositive_total; oba počty ho vidí
+    # storno porušuje negative_fare i reversal; oba počty ho vidí
     assert metrics["rules"] == {
         "out_of_month": 1,
         "implausible_distance": 1,
@@ -59,7 +66,8 @@ def test_pravidla_se_pocitaji_nezavisle_na_poradi(cfg, trips, zones):
         "nonpositive_duration": 1,
         "negative_fare": 2,
         "zero_distance": 1,
-        "nonpositive_total": 3,
+        "zero_total": 1,  # jen se počítá, řádek zůstává publikovaný
+        "reversal": 2,  # storno i jízda z prosince, ta má taky zápornou útratu
     }
     assert metrics["nulled"] == {"trip_distance": 3, "duration_min": 2, "fare_amount": 2}
 
@@ -76,15 +84,16 @@ def test_dalkova_jizda_neni_vada_a_vada_pod_prahem_neprojde(cfg, trips, zones):
     # Se starým prahem na magnitudu vycházelo (5, 3.2): 220 mil chybělo v jmenovateli
     # a 100 mil za 10 minut naopak průměr táhlo nahoru.
     row = out.aggregate.filter(location_id=100).to_dicts()[0]
-    assert (row["distance_obs"], row["avg_distance_mi"]) == (6, 39.333)
+    assert (row["distance_obs"], row["avg_distance_mi"]) == (7, 33.857)
 
 
-def test_stitek_karanteny_je_nejvzacnejsi_pravidlo(cfg, trips, zones):
-    rejects = result(cfg, trips, zones).rejects
+def test_stitek_vyrazeneho_radku_je_nejvzacnejsi_pravidlo(cfg, trips, zones):
+    excluded = result(cfg, trips, zones).excluded
 
-    # řádek z prosince má i nekladnou útratu, ale rozhoduje vzácnější pravidlo
-    reasons = sorted(rejects["reject_reason"].to_list())
-    assert reasons == ["nonpositive_total", "nonpositive_total", "out_of_month"]
+    # Řádek z prosince je taky protizápis, ale rozhoduje vzácnější pravidlo -- a je to
+    # tak správně: do refunds tohohle měsíce nepatří o nic víc než ta jízda sama.
+    reasons = sorted(excluded["reject_reason"].to_list())
+    assert reasons == ["out_of_month", "reversal"]
 
 
 def test_dimenze_se_dojoinovala_vcetne_neznamych_zon(cfg, trips, zones):
@@ -93,3 +102,19 @@ def test_dimenze_se_dojoinovala_vcetne_neznamych_zon(cfg, trips, zones):
     assert aggregate.columns == OUTPUT_COLUMNS
     assert aggregate["borough"].to_list() == ["Manhattan", "Unknown"]
     assert aggregate["zone"].null_count() == 0
+
+
+def test_storna_nepadaji_do_rozpoctu_karanteny(cfg):
+    """Proč tenhle test existuje: než se storna oddělila, jedla z `max_reject_ratio` a
+    gate padal na tom, že se lidem víc reklamovaly jízdy. Podíl storn je vlastnost
+    vendor mixu, ne kvality dat -- a proto má vlastní práh."""
+    rows = {"input": 1000, "published": 900, "reversed": 90, "rejected": 10, "output": 5}
+    metrics = {"rows": rows, "nulled": {}}
+
+    # 9 % storn přeteče vlastní práh a hlásí storna, ne karanténu
+    with pytest.raises(DataQualityError, match="storna 9,00 %|storna 9.00%"):
+        dq.gate(metrics, cfg, None)
+
+    # Se zvednutým prahem na storna projde: 90 + 10 řádků je 10 % vstupu, což by přes
+    # max_reject_ratio 5 % neprošlo, kdyby se storna do karantény pořád počítala.
+    dq.gate(metrics, replace(cfg, max_reversal_ratio=0.20), None)

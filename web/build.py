@@ -153,6 +153,7 @@ CONFIG_KEYS = (
     "max_distance_mi",
     "max_duration_min",
     "max_reject_ratio",
+    "max_reversal_ratio",
     "max_volume_delta",
     "max_null_ratio_distance",
     "max_null_ratio_duration",
@@ -174,12 +175,34 @@ def partitions(layout: storage.Layout) -> list[tuple[int, int]]:
     return sorted(found)
 
 
+def backfill_reversals(run: dict) -> dict:
+    """Manifesty jsou append-only a starší běhy storna neznají: měly je pod pravidlem
+    `nonpositive_total` a počítaly je do karantény. Přepsat je nejde a zahodit by
+    znamenalo díru v řadě, tak se dopočítají do nové podoby.
+
+    Překlad je přesný v penězích a v počtu karantény, ale nadhodnocuje storna o jízdy
+    s nulovou útratou (v 2025-01 jich je 559 z 63 596, tedy 0,9 %) -- ty se ve starém
+    schématu do stejného čísla schovaly a zpětně je z manifestu nerozpleteš. Stránka
+    proto starší běhy značí jako dopočítané.
+    """
+    rows, rules = run.get("rows", {}), run.get("rules", {})
+    if "reversed" in rows or "nonpositive_total" not in rules:
+        return run
+
+    reversed_rows = rules.pop("nonpositive_total")
+    rules["reversal"] = reversed_rows
+    rows["reversed"] = reversed_rows
+    rows["rejected"] = rows.get("rejected", 0) - reversed_rows
+    run["reversals_estimated"] = True
+    return run
+
+
 def read_runs(layout: storage.Layout, year: int, month: int) -> list[dict]:
     """Manifesty partition, nejnovější první. Append-only: partition se přepisuje,
     manifesty přibývají."""
     runs_dir = layout.runs_dir(year, month)
     runs = [
-        storage.read_json(storage.join(runs_dir, name))
+        backfill_reversals(storage.read_json(storage.join(runs_dir, name)))
         for name in storage.list_names(runs_dir)
         if name.endswith(".json")
     ]

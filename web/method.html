@@ -46,12 +46,15 @@
       </div>
     </div>
     <p class="ev">
-      Do karantény jde řádek jen tehdy, když z něj neplyne žádná kladná útrata — žádná
-      účtenka, žádná jízda. To je 1,83 % ledna 2025 a jeho objem se vykazuje zvlášť jako
-      <code>refunds_usd</code>, místo aby se tiše smazal — a rovnou i odečtený, protože
-      samotná hrubá částka by tržbu přeceňovala právě o ty 1,83 % (90,66 mil. $ hrubě,
-      1,66 mil. $ storna). Odečítat se dá, protože storna jdou pravidelně: 1,5–2,0 %
-      objemu každý den měsíce, jen 1. leden má 3,8 %.
+      Celý řádek opouští <code>trips</code> ve dvou případech a jen jeden z nich je vada.
+      Do <strong>karantény</strong> jde jízda, která do zpracovávaného měsíce nepatří —
+      v lednu 2025 přesně 22 řádků z 3,48 milionu. Jako <strong>storno</strong> se počítá
+      záporný protizápis: 1,81 % ledna 2025. Jízda to není (jinak by se ta původní
+      započítala dvakrát), ale objem se vykazuje zvlášť jako <code>refunds_usd</code>,
+      místo aby se tiše smazal — a rovnou i odečtený, protože samotná hrubá částka by
+      tržbu přeceňovala právě o těch 1,81 % (90,66 mil. $ hrubě, 1,66 mil. $ storna).
+      Odečítat se dá, protože storna jdou pravidelně: 1,5–2,0 % objemu každý den měsíce,
+      jen 1. leden má 3,8 %.
     </p>
   </div>
 
@@ -232,8 +235,9 @@
     </div>
     <p class="note" style="margin-top:14px">
       Pravidla se počítají nezávisle — jeden řádek jich může porušit několik naráz — takže
-      součet nedá počet řádků v karanténě a čísla nezávisí na pořadí, ve kterém pravidla
-      běží. Dvě z osmi odmítnou řádek; zbylých šest odmítne jedno pole a jízdu nechají.
+      součet nedá počet řádků mimo výstup a čísla nezávisí na pořadí, ve kterém pravidla
+      běží. Dvě z devíti berou celý řádek (jedno do karantény, jedno jako storno), jedno se
+      jen počítá; zbylých šest odmítne jedno pole a jízdu nechají.
     </p>
   </div>
 
@@ -269,12 +273,12 @@
           <td class="dim wrap">Zdrojové časy nenesou žádný offset. Dvě hodiny v roce jsou nejednoznačné a žádná rekonstrukce by nebyla poctivá.</td>
         </tr>
         <tr>
-          <td class="wrap">Řádek v karanténě přijde o svůj počet jízd</td>
-          <td class="dim wrap">Refundace není jízda, takže opouští <code>trips</code>. Její objem se zveřejňuje zvlášť jako <code>refunds_usd</code> a odečítá v <code>net_revenue_usd</code>, místo aby zmizel.</td>
+          <td class="wrap">Stornovaný řádek přijde o svůj počet jízd</td>
+          <td class="dim wrap">Protizápis není jízda — započítat ho by znamenalo počítat tu původní dvakrát — takže opouští <code>trips</code>. Jeho objem se zveřejňuje zvlášť jako <code>refunds_usd</code> a odečítá v <code>net_revenue_usd</code>, místo aby zmizel.</td>
         </tr>
         <tr>
-          <td class="wrap">Storno se účtuje na svůj den a zónu, ne na den původní jízdy</td>
-          <td class="dim wrap">Zdroj vazbu na původní jízdu nenese. Přes den to nevadí (podíl storen je každý den skoro stejný), na úrovni den × zóna ano: ve 14 řádcích ledna 2025 ze 7 290 je čistá tržba záporná, v 8 z nich bez jediné jízdy. Proto zůstávají oba sloupce vedle čistého.</td>
+          <td class="wrap">Storno bez původní jízdy stáhne den × zónu pod nulu</td>
+          <td class="dim wrap">Explicitní klíč na původní jízdu zdroj nenese, ale protizápis je její kopie: 82 % storn ledna 2025 má kladný řádek se shodným časem, zónami i vzdáleností, a všech osm peněžních sloupců páru se sečte na nulu. Storno tedy padne na den a zónu původní jízdy. Zbylých 18 % je bez páru — jízda z prosince nebo taková, kterou zdroj nikdy nezveřejnil — a ta stáhnou svůj den × zónu do minusu: ve 14 řádcích ze 7 290 je čistá tržba záporná, v 8 z nich bez jediné jízdy. Proto zůstávají oba sloupce vedle čistého.</td>
         </tr>
         <tr>
           <td class="wrap">Přepočty se hlásí, ne hlídají branou</td>
