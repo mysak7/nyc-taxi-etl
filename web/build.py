@@ -51,6 +51,26 @@ from app.config import Config  # noqa: E402
 HERE = pathlib.Path(__file__).resolve().parent
 TOP_ZONES = 25
 
+# Sloupce curated, bez kterých se stránka nepostaví. Není to celý výstup pipeline: co
+# stránka nekreslí, ať klidně chybí.
+REQUIRED_COLUMNS = (
+    "date",
+    "location_id",
+    "borough",
+    "zone",
+    "trips",
+    "yellow_revenue_usd",
+    "refunds_usd",
+    "net_revenue_usd",
+    "avg_distance_mi",
+    "median_distance_mi",
+    "distance_obs",
+    "avg_duration_min",
+    "duration_obs",
+    "avg_fare_usd",
+    "fare_obs",
+)
+
 # Kostra je společná, liší se jen title, tělo a skript. Bez `<head>`: prohlížeč si ho
 # doplní sám a jediné, co by v něm bylo, je `<title>` a `<style>`, které platí i takhle.
 SHELL = """<!doctype html>
@@ -239,8 +259,22 @@ def merge_zone_sums(monthly: list[pl.DataFrame]) -> pl.DataFrame:
     )
 
 
+def check_columns(frame: pl.DataFrame, year: int, month: int) -> None:
+    """Curated může být starší než kód. Sloupec přidaný do transformace se do partition
+    dostane, až když ji pipeline přepočítá -- a nezměněný ETag ji sám o sobě nepřepočítá
+    nikdy. Ať to build řekne rovnou, ne až tracebackem z polars uprostřed `group_by`."""
+    missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
+    if missing:
+        raise SystemExit(
+            f"curated {year:04d}-{month:02d} nemá sloupce {missing}: partition je starší"
+            " než kód, který ji čte. Přepočítej ji backfillem -- state machine se vstupem"
+            ' {"from":"YYYY-MM","to":"YYYY-MM","force":true}.'
+        )
+
+
 def month_payload(layout: storage.Layout, year: int, month: int) -> tuple[dict, pl.DataFrame]:
     frame = storage.scan_parquet(layout.curated_file(year, month)).collect()
+    check_columns(frame, year, month)
 
     daily = (
         frame.group_by("date")
