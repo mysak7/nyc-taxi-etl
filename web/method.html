@@ -1,0 +1,325 @@
+<header>
+  <p class="eyebrow" id="src"></p>
+  <h1>Arguing with the data</h1>
+  <p class="lead">
+    Every number on the data page is the answer to a question that had a second, easier
+    answer. This page is the argument: what the obvious move would have been, what it would
+    have cost, and what the pipeline does instead.
+  </p>
+  <p class="lead">
+    None of the thresholds below were guessed. Each one was measured on the full history
+    first and is recorded next to the run it governed, so a figure published a year ago can
+    still be read against the rule that produced it.
+  </p>
+  <div class="status" id="status"></div>
+</header>
+
+<section>
+  <div class="kpis" id="kpis"></div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>Six arguments</h2>
+    <p class="hint">each settled by measurement, not preference</p>
+  </div>
+  <p class="note">
+    The source is a public dump of what taxi meters and payment terminals reported. It
+    contains rides billed at 276,423 miles, rides that end before they start, and fares
+    below zero. None of that is a reason to distrust the dataset — it is a reason to say
+    out loud what was done about it.
+  </p>
+
+  <div class="card arg">
+    <h3>A broken value — is the whole trip garbage?</h3>
+    <div class="case">
+      <div class="side">
+        <span class="l">The easy move</span>
+        <p>Drop every row that breaks a rule. One filter, a table where every column is clean.</p>
+      </div>
+      <div class="side no">
+        <span class="l">What it costs</span>
+        <p>$2.32M of fares and 88,743 trips thrown away, and the mean distance moves by 0.1 % — 3.166 mi instead of 3.169. Real revenue paid for a rounding difference.</p>
+      </div>
+      <div class="side yes">
+        <span class="l">What we do</span>
+        <p>The receipt is a fact; the measurements are attributes of it. A bad <em>value</em> is nulled and left out of its own average. The row and its money stay.</p>
+      </div>
+    </div>
+    <p class="ev">
+      A row is quarantined only when no positive spend follows from it — no receipt, no
+      trip. That is 1.83 % of January 2025, and its volume is reported separately as
+      <code>refunds_usd</code> rather than silently deleted.
+    </p>
+  </div>
+
+  <div class="card arg">
+    <h3>Which average is the honest one?</h3>
+    <div class="case">
+      <div class="side">
+        <span class="l">The easy move</span>
+        <p>Publish the mean. It is what everyone asks for, and it is one <code>AVG()</code> away.</p>
+      </div>
+      <div class="side no">
+        <span class="l">What it costs</span>
+        <p>122 rows out of 3,475,226 — 0.0035 % — carry 47 % of all miles driven. The longest single "trip" is 276,423 miles; the circumference of the Earth is 24,901. The naive mean overshoots by 89 %.</p>
+      </div>
+      <div class="side yes">
+        <span class="l">What we do</span>
+        <p>Both ship, side by side. The median (1.67 mi) does not move when the tail is absurd; the mean does, and seeing them disagree is the point.</p>
+      </div>
+    </div>
+    <p class="ev">
+      The map and the zone table on the data page therefore never show a mean without its
+      median or its denominator within reach.
+    </p>
+  </div>
+
+  <div class="card arg">
+    <h3>Is 165 miles a long trip or a broken odometer?</h3>
+    <div class="case">
+      <div class="side">
+        <span class="l">The easy move</span>
+        <p>Cap distance by magnitude: anything over 200 miles is not a taxi ride.</p>
+      </div>
+      <div class="side no">
+        <span class="l">What it costs</span>
+        <p>Both errors at once. It missed 136 broken trips under the cap — 165.91 mi in 11.4 minutes for $17.70 — and nulled two genuine long hauls of 206 and 225 mi at 53–59 mph, billed $220 and $400 under rate code 5.</p>
+      </div>
+      <div class="side yes">
+        <span class="l">What we do</span>
+        <p>Judge distance by its ratio to duration, not its size. Magnitude stays only as a backstop for trips under a minute, where the ratio means nothing.</p>
+      </div>
+    </div>
+    <p class="ev">
+      Which field is broken follows from the money: on 93 % of rows implying over 100 mph,
+      the fare matches the duration and not the distance — median $14.46 against the $301
+      the odometer would imply. So the odometer is nulled and the timestamps are kept.
+      118 of the 122 trips over 200 mi break the speed rule anyway, so nothing was lost by
+      dropping the magnitude cap to a backstop.
+    </p>
+  </div>
+
+  <div class="card arg">
+    <h3>One coverage number, or one per row?</h3>
+    <div class="case">
+      <div class="side">
+        <span class="l">The easy move</span>
+        <p>Measure completeness once, put "distance is 97.5 % complete" in a footnote, move on.</p>
+      </div>
+      <div class="side no">
+        <span class="l">What it costs</span>
+        <p>The footnote is true globally and useless locally. Newark Airport on 3 Jan 2025 has 28 trips and exactly one usable distance measurement. Its "average" is one number wearing a plural.</p>
+      </div>
+      <div class="side yes">
+        <span class="l">What we do</span>
+        <p>Every average carries its own denominator — <code>distance_obs</code>, <code>duration_obs</code>, <code>fare_obs</code> — per zone and per day. "Measured on how many trips" is a column, not a caveat.</p>
+      </div>
+    </div>
+    <p class="ev">
+      Distance and duration have different denominators, so both are published. The map's
+      speed metric stands on both at once and is only as trustworthy as the smaller one.
+    </p>
+  </div>
+
+  <div class="card arg">
+    <h3>Should the timestamps be converted to UTC?</h3>
+    <div class="case">
+      <div class="side">
+        <span class="l">The easy move</span>
+        <p>Naive timestamps are a smell. Localise them, store UTC, sort it out at read time.</p>
+      </div>
+      <div class="side no">
+        <span class="l">What it costs</span>
+        <p>They are already New York local time. Converting would shift every late-night trip into the wrong day — and nothing in the pipeline would have caught it, because the totals stay identical.</p>
+      </div>
+      <div class="side yes">
+        <span class="l">What we do</span>
+        <p>Treat them as naive local time, which is what they are, and partition on the local pickup date.</p>
+      </div>
+    </div>
+    <p class="ev">
+      The evidence is the clock change: on 9 Mar 2025 between 02:00 and 03:00 the data holds
+      zero trips, while an ordinary Sunday holds 4,809 in the same hour. Admitted limitation:
+      trip durations spanning that hour are off by ±1 h.
+    </p>
+  </div>
+
+  <div class="card arg">
+    <h3>Does this say what New Yorkers spend on taxis?</h3>
+    <div class="case">
+      <div class="side">
+        <span class="l">The easy move</span>
+        <p>Call the table <code>taxi_trips</code>, call the column <code>revenue</code>, let the reader assume.</p>
+      </div>
+      <div class="side no">
+        <span class="l">What it costs</span>
+        <p>Yellow medallion cabs are 12.4 % of what the city spends on for-hire rides, and under 1.5 % outside Manhattan. Asked "what was spent on taxis in the Bronx", this output answers with a number 122× too small.</p>
+      </div>
+      <div class="side yes">
+        <span class="l">What we do</span>
+        <p>Put the limit in the names. The table is <code>yellow_taxi_trips_by_zone</code>, the column is <code>yellow_revenue_usd</code>, and the map says so under its title.</p>
+      </div>
+    </div>
+    <p class="ev">
+      Measured against HVFHV, Green and FHV for January 2025. The number is not wrong; only
+      a name that invites reading it as the whole market would be.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>How we work</h2>
+    <p class="hint">measure · encode · record</p>
+  </div>
+  <p class="note">
+    A threshold nobody measured is a number somebody liked. Every rule below started as a
+    query over the full history, became an expression, and ends up written into the manifest
+    of every run it governed — so the rule can change without making last year's output
+    unreadable.
+  </p>
+
+  <div class="flow">
+    <div class="step">
+      <span class="n">measure</span>
+      <span class="d">Query the whole history for the shape of the problem: how many rows, how much money, which field is actually the broken one.</span>
+    </div>
+    <div class="arrow" aria-hidden="true">──▶</div>
+    <div class="step">
+      <span class="n">encode</span>
+      <span class="d">One declarative rule: an expression that is true when violated, and an action — quarantine the row, or null one field of it.</span>
+    </div>
+    <div class="arrow" aria-hidden="true">──▶</div>
+    <div class="step">
+      <span class="n">record</span>
+      <span class="d">The run manifest stores the counts and the thresholds that applied, next to the output they produced.</span>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Two severities, not one</h3>
+      <p class="cap">A missing column and an implausible value are different kinds of event and get different answers.</p>
+      <dl class="spec" id="spec-sev"></dl>
+    </div>
+    <div class="card">
+      <h3>Where a refused row goes</h3>
+      <p class="cap">Nothing is deleted. In a regulated setting the answer to "which rows fell out" has to be a query, not a memory.</p>
+      <dl class="spec" id="spec-keep"></dl>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>The rules, and what they have caught</h3>
+    <p class="cap" id="ledger-cap"></p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Threshold applied</th>
+            <th>Effect</th>
+            <th>Field</th>
+            <th class="num">Rows</th>
+            <th class="num">Share of input</th>
+          </tr>
+        </thead>
+        <tbody id="ledger"></tbody>
+      </table>
+    </div>
+    <p class="note" style="margin-top:14px">
+      Rules are counted independently — one row can break several at once — so these do not
+      add up to the quarantine count, and the numbers do not depend on the order the rules
+      run in. Two of the eight refuse the row; the other six refuse one field and keep the
+      trip.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3>What the run is judged against</h3>
+    <p class="cap">Gates, not rules: these do not clean anything, they stop a bad month from being published at all.</p>
+    <div class="plot" id="gates"></div>
+    <p class="note" style="margin-top:14px">
+      The ±40 % volume gate comes from 29 measured months: the largest genuine jump was
+      +21.9 % (2024-09) and the largest drop −13.5 % (2026-01). A gate breach fails the run
+      immediately rather than retrying — the retry would download the same bytes and reach
+      the same verdict.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>What this still gets wrong</h2>
+    <p class="hint">known, measured, unfixed</p>
+  </div>
+  <p class="note">
+    The list a reader would otherwise have to reconstruct from the code. Each of these is a
+    decision, not an oversight — but they are limits of the published numbers all the same.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Limit</th><th>Why it is there</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="wrap">Durations across the DST change are off by ±1 h</td>
+          <td class="dim wrap">The source timestamps carry no offset. Two hours a year are ambiguous and no reconstruction would be honest.</td>
+        </tr>
+        <tr>
+          <td class="wrap">A quarantined row loses its trip count</td>
+          <td class="dim wrap">A refund is not a ride, so it leaves <code>trips</code>. Its volume is published separately as <code>refunds_usd</code> instead of vanishing.</td>
+        </tr>
+        <tr>
+          <td class="wrap">Restatements are reported, not gated</td>
+          <td class="dim wrap">Nobody has measured how much a recomputed month may legitimately move. A threshold here would be the one invented number in the system.</td>
+        </tr>
+        <tr>
+          <td class="wrap"><code>passenger_count</code> is not published</td>
+          <td class="dim wrap">NULL on 15.5 % of rows under Flex Fare. Rules protect the published metrics; dropping 540k trips over a column nobody publishes would be the actual error.</td>
+        </tr>
+        <tr>
+          <td class="wrap">The map's median is a median of daily medians</td>
+          <td class="dim wrap">Medians do not sum across partitions. Means are re-derived from weighted numerators and denominators and are exact; the median over the whole history is an approximation, and the page says so where it is shown.</td>
+        </tr>
+        <tr>
+          <td class="wrap">Raw bytes are overwritten, not versioned</td>
+          <td class="dim wrap">Lineage works by reference — ETag and sha256 in the manifest. Old raw versions expire after 7 days: insurance against a bug, not an archive. The source can be fetched again.</td>
+        </tr>
+        <tr>
+          <td class="wrap">Zone attribution is pickup only</td>
+          <td class="dim wrap">One row is one (pickup day, pickup zone). That is where demand appeared; a trip to JFK counts in Midtown, not at the airport.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="crosslink">
+    <p class="t">
+      <b>The numbers themselves</b> — 263 pickup zones on a map, eight metrics, daily series
+      per month, and the mean sitting next to the median it should be read against.
+    </p>
+    <a href="index.html">◂ The data</a>
+  </div>
+  <div class="crosslink">
+    <p class="t">
+      <b>Whether today's run worked</b> — one row per manifest, which rows each run refused,
+      against which source ETag, and how the schedule decides there is anything to do.
+    </p>
+    <a href="pipeline.html">Pipeline &amp; runs ▸</a>
+  </div>
+</section>
+
+<footer>
+  <p class="eyebrow">About this page</p>
+  <p class="note">
+    The arguments are fixed text; every count, threshold and share in them is read from the
+    run manifests the pipeline wrote next to its own output. Where a figure was measured
+    once against the full history rather than recomputed each run, the sentence says which
+    month it was measured on.
+  </p>
+  <p class="hint" id="foot"></p>
+</footer>

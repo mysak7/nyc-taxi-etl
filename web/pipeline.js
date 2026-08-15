@@ -1,31 +1,6 @@
 /* Stránka o provozu: manifesty, prahy, co pravidla chytila. Čísla o samotných jízdách
    jsou na `index.html` -- sem se z payloadu nedostane ani mapa, ani denní řady. */
 
-// Popisky s číslem se berou z prahů toho běhu (`thresholds_applied` v manifestu), ne
-// z aktuální konfigurace. Když se práh změní, starý běh se pořád popisuje tím, podle
-// čeho se doopravdy řídil.
-const RULE_LABELS = {
-  negative_fare: () => "negative fare",
-  zero_distance: () => "zero distance",
-  nonpositive_total: () => "non-positive total",
-  nonpositive_duration: () => "non-positive duration",
-  out_of_month: () => "pickup out of month",
-  duration_over_limit: (t) => (t.max_duration_min ? "duration over " + t.max_duration_min / 60 + " h" : "duration over limit"),
-  implausible_distance: (t) => (t.max_distance_mi ? "distance over " + nf.format(t.max_distance_mi) + " mi" : "implausible distance"),
-  impossible_speed: (t) => (t.max_speed_mph ? "implied speed over " + nf.format(t.max_speed_mph) + " mph" : "impossible speed"),
-};
-
-const RULE_EFFECT = {
-  nonpositive_total: "quarantined",
-  out_of_month: "quarantined",
-  negative_fare: "field nulled",
-  zero_distance: "field nulled",
-  nonpositive_duration: "field nulled",
-  duration_over_limit: "field nulled",
-  implausible_distance: "field nulled",
-  impossible_speed: "field nulled",
-};
-
 /* ---------- chart: row funnel ---------- */
 
 function drawFunnel(host, m) {
@@ -165,7 +140,7 @@ function render() {
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => ({
-      label: RULE_LABELS[k] ? RULE_LABELS[k](applied) : k,
+      label: ruleLabel(k, applied),
       value: v,
       display: nf.format(v),
       tip: `${nf.format(v)} rows · ${RULE_EFFECT[k] || "—"}<br><span class="r">${k}</span>`,

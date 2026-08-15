@@ -6,9 +6,9 @@
     in and rolled up by day. Pick a metric, hover a zone, step through the months.
   </p>
   <p class="lead">
-    The numbers are the pipeline's own output, read straight from the Parquet files it wrote —
-    nothing is mocked, sampled, or rounded up for effect. How they get made, and how much of
-    each one is measured rather than assumed, is on the <a href="pipeline.html">pipeline page</a>.
+    Yellow cabs are one part of the city's for-hire market — about an eighth of what New
+    Yorkers spend on rides, and far less outside Manhattan. Read these numbers as the yellow
+    taxi, not as the whole street.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -23,17 +23,17 @@
     <p class="hint">eight metrics · whole history</p>
   </div>
   <p class="note">
-    Every trip carries the pickup zone it started in, so the data is already a map — it just
-    needs the outlines. These come from the TLC zone shapefile, simplified once and baked into
-    the page. Hover a zone to read its whole profile, not just the metric it is coloured by.
+    Every trip carries the zone it was picked up in, so the data is already a map. The
+    outlines come from the city's taxi zone shapefile. Hover a zone to read its whole
+    profile, not just the metric it is coloured by.
   </p>
 
   <div class="card">
     <h3 id="map-title"></h3>
     <p class="cap">
-      Six buckets holding the same number of zones each, so the colour is a ranking, not a ratio —
-      equal-width bands would paint everything except Midtown the same shade. Means built on a
-      handful of trips are noisy, so the tooltip always shows the trip count underneath them.
+      Colour is a ranking: six bands holding the same number of zones each. An average built
+      on a handful of trips is a noisy average, so the tooltip always shows how many trips
+      it stands on.
     </p>
     <div class="metrics" id="metric-picker" role="group" aria-label="Colour the map by"></div>
     <p class="cap" id="map-about"></p>
@@ -55,13 +55,13 @@
 
   <div class="card">
     <h3>Trips per month</h3>
-    <p class="cap">Every source month in the dataset. Click a bar to load it below.</p>
+    <p class="cap">Every month the city has published. Click a bar to load it below.</p>
     <div class="plot" id="history"></div>
   </div>
 
   <div class="card">
     <h3>Trips per day</h3>
-    <p class="cap">Shaded bands are weekends. Saturday and Sunday have their own profile, so without them the Monday drop reads as an incident.</p>
+    <p class="cap">Shaded bands are weekends — Saturday and Sunday ride differently, and the Monday step is the week starting, not an outage.</p>
     <div class="plot" id="daily"></div>
     <details>
       <summary>Show as a table</summary>
@@ -78,10 +78,9 @@
   <div class="card">
     <h3>The mean next to the median</h3>
     <p class="cap">
-      Why the output carries both, plus a denominator: 122 rows out of 3.5 million hold 47 % of
-      all miles driven, so the mean distance is overshot while the median does not move.
-      Coverage says what share of the trips that mean is actually built from — read the mean
-      with an eye on it.
+      A handful of trips with implausible odometer readings pull the average distance up;
+      the median stays put. Coverage is the share of trips the average could actually be
+      measured on — read the mean with an eye on it.
     </p>
     <div class="scroll">
       <table>
@@ -105,20 +104,27 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>These are yellow medallion taxis only</b> — about 12 % of what New Yorkers spend on
-      for-hire rides, and under 1.5 % outside Manhattan. Where the rest of the caveats come
-      from, which rows were dropped and why, and whether today's run actually succeeded.
+      <b>How these numbers were decided</b> — which rows were refused and why, why the mean
+      and the median are published together, and what this output still gets wrong.
     </p>
-    <a href="pipeline.html">Pipeline &amp; data quality ▸</a>
+    <a href="method.html">Method &amp; data quality ▸</a>
+  </div>
+  <div class="crosslink">
+    <p class="t">
+      <b>Whether the data is current</b> — when the city last published, when this page was
+      last rebuilt, and what the pipeline did on each of its runs.
+    </p>
+    <a href="pipeline.html">Pipeline &amp; runs ▸</a>
   </div>
 </section>
 
 <footer>
   <p class="eyebrow">About this page</p>
   <p class="note">
-    A static file built from the curated layer on S3. The whole history is a few megabytes, so
-    the data is baked into the page — no API, no database, nothing running between the moments
-    someone looks at it. Anyone who wants every row reads the Parquet instead.
+    Source: the NYC Taxi &amp; Limousine Commission trip record data, aggregated by pickup
+    zone and pickup day. The page is static — the whole history is a few megabytes, so it
+    is baked into the file and nothing is fetched while you read it. Anyone who wants every
+    row reads the Parquet instead.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

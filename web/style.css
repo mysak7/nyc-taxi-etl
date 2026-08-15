@@ -351,6 +351,52 @@ select {
 
 .card .cap { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin: 0 0 10px; }
 
+/* ---------- argument (metodická stránka) ---------- */
+
+/* Tři sloupce vedle sebe, protože jde o jedno rozhodnutí ze tří stran, ne o tři odstavce
+   za sebou. V úzkém okně se sloupce srovnají pod sebe a barevný proužek se překlopí
+   z levé hrany na horní -- jinak by tři svislé linky pod sebou vypadaly jako seznam. */
+.arg .case {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 10px 0 2px;
+}
+
+.side { border-left: 2px solid var(--rule); padding: 2px 0 2px 12px; }
+.side.no { border-color: var(--s2); }
+.side.yes { border-color: var(--accent); }
+
+.side .l {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+
+.side.yes .l { color: var(--ink-2); }
+.side p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.side.yes p { color: var(--ink); }
+
+.arg .ev {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  max-width: 84ch;
+}
+
+@media (max-width: 620px) {
+  .side { border-left: 0; border-top: 2px solid var(--rule); padding: 10px 0 0; }
+  .side.no { border-color: var(--s2); }
+  .side.yes { border-color: var(--accent); }
+}
+
 .plot { position: relative; }
 .plot svg { display: block; width: 100%; }
 

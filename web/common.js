@@ -1,12 +1,12 @@
 "use strict";
 
-/* Sdílený základ obou stránek: formátování, SVG helpery a měsíční přepínač. Konkrétní
-   grafy a to, co je na stránce vidět, patří do `data.js` / `pipeline.js`.
+/* Sdílený základ všech stránek: formátování, SVG helpery a měsíční přepínač. Konkrétní
+   grafy a to, co je na stránce vidět, patří do `data.js` / `pipeline.js` / `method.js`.
 
-   Obě stránky čtou týž tvar payloadu (`dataset`, `generated_at`, `source`, `config`,
+   Všechny stránky čtou týž tvar payloadu (`dataset`, `generated_at`, `source`, `config`,
    `freshness`, `months`), jen s jinými poli v `months` -- build každé stránce zapeče
    jen to, co doopravdy kreslí. Proto tenhle soubor nesmí sáhnout na nic, co má jen
-   jedna z nich. */
+   některá z nich. */
 
 const DATA = JSON.parse(document.getElementById("payload").textContent);
 const MONTHS = DATA.months;
@@ -52,6 +52,50 @@ function select(key) {
   current = key;
   render();
 }
+
+/* ---------- slovník pravidel ---------- */
+
+/* Čte je provozní stránka (co pravidlo chytilo v jednom běhu) i metodická (co chytilo
+   za celou historii), takže je sdílený -- jinak by se dvě stránky rozešly v tom, jak
+   se totéž pravidlo jmenuje.
+
+   Popisky s číslem se berou z prahů toho běhu (`thresholds_applied` v manifestu), ne
+   z aktuální konfigurace. Když se práh změní, starý běh se pořád popisuje tím, podle
+   čeho se doopravdy řídil. */
+const RULE_LABELS = {
+  negative_fare: () => "negative fare",
+  zero_distance: () => "zero distance",
+  nonpositive_total: () => "non-positive total",
+  nonpositive_duration: () => "non-positive duration",
+  out_of_month: () => "pickup out of month",
+  duration_over_limit: (t) => (t.max_duration_min ? "duration over " + t.max_duration_min / 60 + " h" : "duration over limit"),
+  implausible_distance: (t) => (t.max_distance_mi ? "distance over " + nf.format(t.max_distance_mi) + " mi" : "implausible distance"),
+  impossible_speed: (t) => (t.max_speed_mph ? "implied speed over " + nf.format(t.max_speed_mph) + " mph" : "impossible speed"),
+};
+
+const RULE_EFFECT = {
+  nonpositive_total: "quarantined",
+  out_of_month: "quarantined",
+  negative_fare: "field nulled",
+  zero_distance: "field nulled",
+  nonpositive_duration: "field nulled",
+  duration_over_limit: "field nulled",
+  implausible_distance: "field nulled",
+  impossible_speed: "field nulled",
+};
+
+// Které pole pravidlo vynuluje. Tabulka pravidel na metodické stránce to ukazuje vedle
+// důsledku: "vynulováno" samo o sobě neříká, které z měření se tím ztratí.
+const RULE_FIELD = {
+  negative_fare: "fare_amount",
+  zero_distance: "trip_distance",
+  implausible_distance: "trip_distance",
+  impossible_speed: "trip_distance",
+  nonpositive_duration: "duration_min",
+  duration_over_limit: "duration_min",
+};
+
+const ruleLabel = (name, applied) => (RULE_LABELS[name] ? RULE_LABELS[name](applied || {}) : name);
 
 /* ---------- svg helpers ---------- */
 

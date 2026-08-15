@@ -8,18 +8,19 @@ pro pipeline samotnou. Data jsou zapečená v souboru: celá historie je jednotk
 takže agregát pro stránku se vejde do stovek kB a nic za běhu se nedotahuje. Žádné API,
 žádná databáze, nic, co by běželo mezi zobrazeními.
 
-Stránky jsou dvě, protože čtenáři jsou dva. `index.html` odpovídá na otázku "co se v
-New Yorku jezdí" -- mapa, měsíce, zóny. `pipeline.html` odpovídá na "dá se tomu číslu
-věřit" -- manifesty, prahy, co pravidla chytila. Jedna stránka to měla obojí promíchané
-a ani jeden z těch dvou lidí na ní nenašel svoje.
+Stránky jsou tři, protože otázky jsou tři. `index.html` odpovídá na "co se v New Yorku
+jezdí" -- mapa, měsíce, zóny; je psaná tak, jako by byla veřejná produkční stránka, a
+metodické komentáře na ní nejsou. `method.html` odpovídá na "proč jsou ta čísla taková"
+-- co by udělal snadný postup, co by stál a co se dělá místo toho. `pipeline.html`
+odpovídá na "dá se tomu běhu věřit" -- manifesty, prahy, co pravidla chytila.
 
-Rozdělený je i payload, ne jen sekce: mapa je zdaleka největší kus a na provozní stránce
-nemá co dělat, manifesty zase nemá co dělat na té datové. Každá stránka tak nese jen to,
-co doopravdy kreslí, a obě jsou menší než ta původní jedna.
+Rozdělený je i payload, ne jen sekce: mapa je zdaleka největší kus a na provozní ani
+metodické stránce nemá co dělat, manifesty zase nemá co dělat na té datové. Každá
+stránka tak nese jen to, co doopravdy kreslí.
 
 Skládá se to ze společných kusů (`style.css`, `common.js`) a dvojice per stránku
-(`data.html` + `data.js`, `pipeline.html` + `pipeline.js`). Výsledek je pořád jeden
-soubor na stránku -- žádný externí requestem tažený asset.
+(`data.html` + `data.js`, `method.html` + `method.js`, `pipeline.html` + `pipeline.js`).
+Výsledek je pořád jeden soubor na stránku -- žádný externí requestem tažený asset.
 
 Rozsah dat ve stránce je záměrně menší než curated: denní řady, top zóny a jeden
 agregát na zónu přes celou historii pro mapu -- ne všechny řádky. Kdo chce celý
@@ -66,7 +67,7 @@ __BODY__
 
 # Odkazy jsou relativní bez lomítka, takže stránky fungují i otevřené z disku, a zároveň
 # sedí, když Cloudflare Pages naservíruje `pipeline.html` na `/pipeline`.
-NAV = (("index.html", "Data"), ("pipeline.html", "Pipeline"))
+NAV = (("index.html", "Data"), ("method.html", "Method"), ("pipeline.html", "Pipeline"))
 
 PAGES = {
     # jméno souboru -> (zdrojová dvojice, title, popis, klíče měsíců v payloadu)
@@ -75,6 +76,15 @@ PAGES = {
         "NYC Yellow Taxi by zone",
         "Yellow medallion taxi trips in New York, by pickup zone and by day.",
         ("key", "year", "month", "trips", "revenue", "daily", "zones", "zones_total"),
+    ),
+    # Metodická stránka počítá z manifestů totéž co provozní, jen přes celou historii
+    # místo jednoho běhu -- proto tytéž klíče a žádná mapa ani denní řady.
+    "method.html": (
+        "method",
+        "NYC Taxi data quality: the arguments",
+        "Why the published numbers look the way they do: what the easy answer would have"
+        " cost, which thresholds were measured, and what the output still gets wrong.",
+        ("key", "year", "month", "rows", "trips", "runs"),
     ),
     "pipeline.html": (
         "pipeline",
