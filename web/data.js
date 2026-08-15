@@ -361,26 +361,76 @@ function buildHeader() {
   const f = DATA.freshness;
   buildChips([
     { dot: "good", text: plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN },
+    // Součet přes celou historii zůstává, ale jako údaj o rozsahu datasetu; dlaždice níž
+    // patří vybranému měsíci, protože jeden měsíc má tendenci a součet ne.
+    { dot: "info", text: nf1.format(TOTAL_TRIPS / 1e6) + " mil. jízd · " + usdBig(TOTAL_REVENUE) + " jízdného" },
     { dot: "good", text: "nejnovější měsíc město zveřejnilo před " + f.source_age_days + " dny (" + f.source_newest + ")" },
     { dot: "info", text: "postaveno " + DATA.generated_at },
   ]);
 
-  const trips = MONTHS.reduce((a, m) => a + m.trips, 0);
-  const revenue = MONTHS.reduce((a, m) => a + m.net_revenue, 0);
-  const refunds = MONTHS.reduce((a, m) => a + m.refunds, 0);
-  // Nejvytíženější zóna se bere z mapy, protože ta jediná nese celou historii; měsíční
-  // `zones` je jen top 25 za jeden měsíc.
-  const busiest = DATA.map.zones.reduce((a, z) => (z.trips > a.trips ? z : a));
-
-  buildTiles([
-    { k: "Jízdy", v: nf1.format(trips / 1e6) + " mil.", s: nf.format(trips) + " za " + plural(MONTHS.length, "měsíc", "měsíce", "měsíců") },
-    { k: "Zaplacené jízdné", v: usdBig(revenue), s: "po odečtení storen (" + pct(-refunds / (revenue - refunds)) + " objemu)" },
-    { k: "Průměrná jízda", v: "$" + nf2.format(revenue / trips), s: "tržba na jízdu, celá historie" },
-    { k: "Nejvytíženější nástup", v: busiest.zone, s: nf.format(busiest.trips) + " jízd · " + pct(busiest.trips / trips) + " ze všech", name: true },
-  ]);
-
   document.getElementById("foot").textContent =
     "Postaveno " + DATA.generated_at + " z " + plural(MONTHS.length, "souboru Parquet", "souborů Parquet") + " pokrývajících " + SPAN + ".";
+}
+
+/* ---------- dlaždice vybraného měsíce ---------- */
+
+/* Dlaždice ukazují jeden měsíc, ne celou historii: součet přes 29 měsíců je pořád stejné
+   číslo a nic neříká o tom, kam to jde. Vedle měsíce proto stojí průměr všech měsíců
+   a odchylka od něj.
+
+   Jízdy a tržby se porovnávají na den, ne na měsíc. Únor má o desetinu dní míň než
+   leden, takže měsíční součty by kreslily propad tam, kde je jen kratší kalendář; a
+   nejnovější měsíc bývá zveřejněný celý, ale kdyby nebyl, projevilo by se totéž.
+   Poměrová čísla (průměrná jízda, podíl zóny) žádnou normalizaci nepotřebují -- délka
+   měsíce se v nich vykrátí sama. */
+
+const TOTAL_TRIPS = MONTHS.reduce((a, m) => a + m.trips, 0);
+const TOTAL_REVENUE = MONTHS.reduce((a, m) => a + m.net_revenue, 0);
+const TOTAL_DAYS = MONTHS.reduce((a, m) => a + m.daily.length, 0);
+const AVG_TRIPS_DAY = TOTAL_TRIPS / TOTAL_DAYS;
+const AVG_REVENUE_DAY = TOTAL_REVENUE / TOTAL_DAYS;
+const AVG_FARE = TOTAL_REVENUE / TOTAL_TRIPS;
+// Podíl zóny za celou historii se bere z mapy -- ta jediná nese všechny zóny přes všechny
+// měsíce, kdežto měsíční `zones` je useknuté na top 25.
+const HIST_SHARE = new Map(DATA.map.zones.map((z) => [z.location_id, z.trips / TOTAL_TRIPS]));
+
+function buildTilesFor(m) {
+  const days = m.daily.length;
+  const tripsDay = m.trips / days;
+  const revenueDay = m.net_revenue / days;
+  const fare = m.net_revenue / m.trips;
+  const busiest = m.zones[0];
+  const share = busiest.trips / m.trips;
+
+  buildTiles([
+    {
+      k: "Jízdy",
+      v: nf1.format(m.trips / 1e6) + " mil.",
+      s: nf.format(Math.round(tripsDay)) + " / den · " + delta(tripsDay, AVG_TRIPS_DAY),
+    },
+    {
+      k: "Zaplacené jízdné",
+      v: usdBig(m.net_revenue),
+      s: usdCompact(revenueDay) + " / den · " + delta(revenueDay, AVG_REVENUE_DAY),
+    },
+    {
+      k: "Průměrná jízda",
+      v: "$" + nf2.format(fare),
+      s: "průměr $" + nf2.format(AVG_FARE) + " · " + delta(fare, AVG_FARE),
+    },
+    {
+      k: "Nejvytíženější nástup",
+      v: busiest.zone,
+      s: pct(share) + " z měsíce · " + delta(share, HIST_SHARE.get(busiest.location_id)),
+      name: true,
+    },
+  ]);
+
+  document.getElementById("kpis-cap").innerHTML =
+    label(m) + " proti průměru " + plural(MONTHS.length, "měsíce", "měsíců", "měsíců")
+    + " (" + SPAN + "). Jízdy a tržby se srovnávají na den, aby krátký únor nevypadal jako"
+    + " propad; tržby jsou po odečtení storen, kterých v tomhle měsíci bylo "
+    + pct(-m.refunds / (m.net_revenue - m.refunds)) + " objemu.";
 }
 
 function buildMetricPicker() {
@@ -405,6 +455,7 @@ function buildMetricPicker() {
 function render() {
   const m = month();
   syncPicker();
+  buildTilesFor(m);
 
   drawHistory(document.getElementById("history"));
   drawDaily(document.getElementById("daily"), m);

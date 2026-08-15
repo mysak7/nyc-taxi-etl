@@ -40,6 +40,16 @@ const usdCompact = (v) => {
 // Přes miliardu už "3214 mil." nikdo nepřečte.
 const usdBig = (v) => (v >= 1e9 ? "$" + nf2.format(v / 1e9) + " mld." : "$" + nf.format(Math.round(v / 1e6)) + " mil.");
 const label = (m) => MONTH_NAMES[m.month - 1] + " " + m.year;
+// Číslo za jeden měsíc samo o sobě neříká, jestli je to hodně: vedle něj musí stát
+// průměr ostatních měsíců a odchylka od něj. Pod půl procenta se směr nekreslí -- to
+// je šum, ne tendence, a šipka by tvrdila víc, než v datech je.
+const delta = (v, mean) => {
+  if (!mean || v == null) return "";
+  const d = v / mean - 1;
+  const dir = Math.abs(d) < 0.005 ? "flat" : d > 0 ? "up" : "down";
+  const arrow = dir === "flat" ? "→" : dir === "up" ? "▲" : "▼";
+  return `<b class="dv ${dir}">${arrow} ${nf1.format(Math.abs(d) * 100)} %</b>`;
+};
 const dayOf = (iso) => new Date(iso + "T00:00:00");
 const isWeekend = (iso) => [0, 6].includes(dayOf(iso).getDay());
 const dayLabel = (iso) => { const d = dayOf(iso); return d.getDate() + ". " + MONTH_NAMES[d.getMonth()]; };

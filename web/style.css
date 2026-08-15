@@ -213,6 +213,11 @@ section { display: flex; flex-direction: column; gap: 16px; }
 .tile .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
 .tile .v { font-size: 30px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; }
 .tile .s { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+/* Odchylka od průměru měsíců. Bez barvy: víc jízd v srpnu není "dobře" a míň v únoru
+   není "špatně" -- zelená a červená by do popisného čísla propašovaly hodnocení, které
+   z dat neplyne. Směr nese šipka, důraz jen tmavší inkoust. */
+.tile .dv { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.tile .dv.flat { color: var(--ink-3); font-weight: 400; }
 
 /* ---------- pipeline graph ---------- */
 
