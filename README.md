@@ -58,6 +58,7 @@ je místo, kde vznikla poptávka.
 | `avg_fare_usd`, `fare_obs` | |
 | `yellow_revenue_usd` | hrubá tržba (`total_amount`) |
 | `refunds_usd` | storna, záporné znaménko |
+| `net_revenue_usd` | hrubá tržba po stornech — číslo, které se vykazuje |
 
 Výstup: `curated/dataset=yellow/year=2025/month=01/yellow_taxi_trips_by_zone.parquet`.
 Celá historie 29 měsíců je ~4,6 MB, přečte se jedním
@@ -115,7 +116,7 @@ Naměřeno na 2025-01 (3 475 226 řádků), prahy mají rezervu z měření:
 
 | pravidlo | řádků | co se stane | práh |
 |---|---|---|---|
-| `total_amount <= 0` | 63 596 (1,83 %) | karanténa; objem do `refunds_usd` | karanténa > 20 % → fail |
+| `total_amount <= 0` | 63 596 (1,83 %) | karanténa; objem do `refunds_usd` a odečtený v `net_revenue_usd` | karanténa > 20 % → fail |
 | pickup mimo měsíc | 22 | karanténa (partitioning) | |
 | `fare_amount < 0` | 144 118 | vynulovat `fare_amount` | |
 | `trip_distance <= 0` / `> 300 mi` | 90 893 / 118 | vynulovat `trip_distance` | > 10 % → fail |
@@ -260,7 +261,13 @@ mapped tasky. Spark by na tomhle objemu byl dekorace, která zdraží provoz i o
 - **Odchozí provoz Lambdy není omezený na CloudFront.** Bez VPC to nejde a VPC by přidala
   NAT a security groupu — víc povrchu než užitku pro funkci, která volá jednu doménu.
 - **Karanténa vyřazuje celý řádek**, takže storno vypadne i z `trips`. Objem storn je proto
-  ve výstupu zvlášť (`refunds_usd`), ne schovaný v karanténě.
+  ve výstupu zvlášť (`refunds_usd`) a rovnou i odečtený (`net_revenue_usd`) — jen hrubé
+  číslo by tržbu přeceňovalo o 1,83 % (2025-01: 90,66 mil. $ hrubě, 1,66 mil. $ storna).
+  Storno se přitom účtuje na svůj vlastní den a zónu, ne na den původní jízdy; přes den
+  to nevadí (podíl storen je 1,5–2,0 % každý den měsíce, jediná výjimka je 1. leden se
+  3,8 %), na úrovni den × zóna ano — ve 14 z 7 290 řádků 2025-01 je čistá tržba záporná,
+  v 8 z nich dokonce bez jediné jízdy. Proto zůstávají v curated všechny tři sloupce:
+  rozklad si každý spočítá zpátky.
 - **`passenger_count` není ve výstupu** (NULL u 15,5 % řádků, Flex Fare). Pravidla mají
   chránit publikované metriky, ne pokrývat „co je v datech divné" — zahodit kvůli němu 540
   tisíc jízd by byla chyba.

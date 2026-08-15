@@ -39,6 +39,7 @@ OUTPUT_COLUMNS = [
     "fare_obs",
     "yellow_revenue_usd",
     "refunds_usd",
+    "net_revenue_usd",
 ]
 
 
@@ -87,6 +88,11 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
     aggregate = aggregate.with_columns(
         pl.col("trips", "distance_obs", "duration_obs", "fare_obs").fill_null(0),
         pl.col("yellow_revenue_usd", "refunds_usd").fill_null(0.0),
+    )
+    # Hrubá tržba přeceňuje: storna jsou 1,8 % objemu a v datech nezmizí, jen leží
+    # vedle. Čistá tržba je jejich součet -- rozklad zůstává v obou sloupcích.
+    aggregate = aggregate.with_columns(
+        net_revenue_usd=(pl.col("yellow_revenue_usd") + pl.col("refunds_usd")).round(2)
     )
     aggregate = (
         aggregate.join(_zones(zones), on="location_id", how="left", validate="m:1")

@@ -76,7 +76,18 @@ PAGES = {
         "data",
         "Žluté taxíky NYC po zónách",
         "Jízdy žlutých medailonových taxíků v New Yorku podle zóny nástupu a podle dne.",
-        ("key", "year", "month", "trips", "revenue", "daily", "zones", "zones_total"),
+        (
+            "key",
+            "year",
+            "month",
+            "trips",
+            "revenue",
+            "refunds",
+            "net_revenue",
+            "daily",
+            "zones",
+            "zones_total",
+        ),
     ),
     # Metodická stránka počítá z manifestů totéž co provozní, jen přes celou historii
     # místo jednoho běhu -- proto tytéž klíče a žádná mapa ani denní řady.
@@ -144,6 +155,8 @@ def zone_sums(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.group_by("location_id", "borough", "zone").agg(
         pl.col("trips").sum().alias("trips"),
         pl.col("yellow_revenue_usd").sum().round(0).alias("revenue"),
+        pl.col("refunds_usd").sum().round(0).alias("refunds"),
+        pl.col("net_revenue_usd").sum().round(0).alias("net_revenue"),
         pl.col("distance_obs").sum().alias("distance_obs"),
         (pl.col("avg_distance_mi") * pl.col("distance_obs")).sum().alias("_dist"),
         pl.col("median_distance_mi").median().round(2).alias("median_distance_mi"),
@@ -195,6 +208,8 @@ def merge_zone_sums(monthly: list[pl.DataFrame]) -> pl.DataFrame:
         .agg(
             pl.col("trips").sum(),
             pl.col("revenue").sum(),
+            pl.col("refunds").sum(),
+            pl.col("net_revenue").sum(),
             pl.col("distance_obs").sum(),
             pl.col("_dist").sum(),
             pl.col("median_distance_mi").median().round(2),
@@ -215,6 +230,7 @@ def month_payload(layout: storage.Layout, year: int, month: int) -> tuple[dict, 
             pl.col("trips").sum().alias("trips"),
             pl.col("yellow_revenue_usd").sum().round(2).alias("revenue"),
             pl.col("refunds_usd").sum().round(2).alias("refunds"),
+            pl.col("net_revenue_usd").sum().round(2).alias("net_revenue"),
         )
         .sort("date")
     )
@@ -230,6 +246,7 @@ def month_payload(layout: storage.Layout, year: int, month: int) -> tuple[dict, 
         "trips": int(frame["trips"].sum()),
         "revenue": round(float(frame["yellow_revenue_usd"].sum()), 2),
         "refunds": round(float(frame["refunds_usd"].sum()), 2),
+        "net_revenue": round(float(frame["net_revenue_usd"].sum()), 2),
         "runs": read_runs(layout, year, month),
         "daily": daily.to_dicts(),
         "zones": zones.head(TOP_ZONES).to_dicts(),
@@ -252,6 +269,8 @@ def map_payload(monthly: list[pl.DataFrame]) -> dict:
         "zone",
         "trips",
         "revenue",
+        "refunds",
+        "net_revenue",
         "avg_fare_usd",
         "avg_distance_mi",
         "avg_duration_min",

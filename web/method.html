@@ -48,7 +48,10 @@
     <p class="ev">
       Do karantény jde řádek jen tehdy, když z něj neplyne žádná kladná útrata — žádná
       účtenka, žádná jízda. To je 1,83 % ledna 2025 a jeho objem se vykazuje zvlášť jako
-      <code>refunds_usd</code>, místo aby se tiše smazal.
+      <code>refunds_usd</code>, místo aby se tiše smazal — a rovnou i odečtený, protože
+      samotná hrubá částka by tržbu přeceňovala právě o ty 1,83 % (90,66 mil. $ hrubě,
+      1,66 mil. $ storna). Odečítat se dá, protože storna jdou pravidelně: 1,5–2,0 %
+      objemu každý den měsíce, jen 1. leden má 3,8 %.
     </p>
   </div>
 
@@ -267,7 +270,11 @@
         </tr>
         <tr>
           <td class="wrap">Řádek v karanténě přijde o svůj počet jízd</td>
-          <td class="dim wrap">Refundace není jízda, takže opouští <code>trips</code>. Její objem se zveřejňuje zvlášť jako <code>refunds_usd</code>, místo aby zmizel.</td>
+          <td class="dim wrap">Refundace není jízda, takže opouští <code>trips</code>. Její objem se zveřejňuje zvlášť jako <code>refunds_usd</code> a odečítá v <code>net_revenue_usd</code>, místo aby zmizel.</td>
+        </tr>
+        <tr>
+          <td class="wrap">Storno se účtuje na svůj den a zónu, ne na den původní jízdy</td>
+          <td class="dim wrap">Zdroj vazbu na původní jízdu nenese. Přes den to nevadí (podíl storen je každý den skoro stejný), na úrovni den × zóna ano: ve 14 řádcích ledna 2025 ze 7 290 je čistá tržba záporná, v 8 z nich bez jediné jízdy. Proto zůstávají oba sloupce vedle čistého.</td>
         </tr>
         <tr>
           <td class="wrap">Přepočty se hlásí, ne hlídají branou</td>

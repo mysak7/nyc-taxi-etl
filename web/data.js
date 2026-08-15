@@ -43,7 +43,7 @@ function drawHistory(host) {
     hit.appendChild(el("title", {}, label(m) + ": " + nf.format(m.trips) + " jízd"));
     hit.addEventListener("mousemove", () => {
       tip.innerHTML = `<b>${label(m)}</b><br>${nf.format(m.trips)} jízd<br>`
-        + `<span class="r">tržby ${usdM(m.revenue)}</span>`;
+        + `<span class="r">tržby ${usdM(m.net_revenue)} po stornech</span>`;
       placeTip(tip, host, ((L + i * slot + slot / 2) / width) * host.clientWidth, Math.max(0, ((y(m.trips) - 4) / H) * host.clientHeight - 64));
     });
     hit.addEventListener("mouseleave", () => { tip.hidden = true; });
@@ -116,7 +116,7 @@ function drawDaily(host, m) {
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
     knob.setAttribute("cx", x(i)); knob.setAttribute("cy", y(d.trips)); knob.setAttribute("opacity", 1);
     tip.innerHTML = `<b>${dayLabel(d.date)}</b>${isWeekend(d.date) ? " <span class='r'>víkend</span>" : ""}<br>`
-      + `${nf.format(d.trips)} jízd<br><span class="r">tržby ${usd(d.revenue)}<br>refundace ${usd(d.refunds)}</span>`;
+      + `${nf.format(d.trips)} jízd<br><span class="r">tržby ${usd(d.net_revenue)}<br>hrubě ${usd(d.revenue)} · storna ${usd(d.refunds)}</span>`;
     placeTip(tip, host, (x(i) / width) * host.clientWidth, Math.max(4, (y(d.trips) / H) * host.clientHeight - 84));
   });
 
@@ -156,8 +156,8 @@ const METRICS = {
   revenue: {
     group: "totals",
     label: "Tržby",
-    about: "Hrubá <code>total_amount</code> zveřejněných jízd — včetně spropitného, mýtného a příplatků. Refundace se vykazují zvlášť a neodečítají se.",
-    of: (z) => z.revenue,
+    about: "<code>total_amount</code> zveřejněných jízd — včetně spropitného, mýtného a příplatků — minus storna. Hrubá částka i objem storen zůstávají v curated jako vlastní sloupce; tady se ukazuje to, co doopravdy přiteklo.",
+    of: (z) => z.net_revenue,
     full: (v) => usd(v),
     brief: usdCompact,
     short: usdCompact,
@@ -165,8 +165,8 @@ const METRICS = {
   revenue_per_trip: {
     group: "means",
     label: "Tržba / jízdu",
-    about: "Tržby dělené počtem jízd. Každý zveřejněný řádek má celkovou částku, takže tenhle jmenovatel je přesný — na rozdíl od průměrů pod ním, které stojí jen na řádcích s použitelnou hodnotou.",
-    of: (z) => ratio(z.revenue, z.trips),
+    about: "Čisté tržby dělené počtem jízd. Každý zveřejněný řádek má celkovou částku, takže tenhle jmenovatel je přesný — na rozdíl od průměrů pod ním, které stojí jen na řádcích s použitelnou hodnotou. Čitatel je po odečtení storen, jmenovatel je bez nich: storno není jízda.",
+    of: (z) => ratio(z.net_revenue, z.trips),
     full: (v) => "$" + nf2.format(v),
     short: (v) => "$" + nf1.format(v),
   },
@@ -290,6 +290,7 @@ function drawMap(host) {
         ? [
             `<b>${named[0]}</b> · ${named[1]}`,
             `${cell("trips")} · ${cell("revenue")}`,
+            `<span class="r">hrubě ${usdCompact(z.revenue)} · storna ${usdCompact(z.refunds)}</span>`,
             `<span class="r">${cell("revenue_per_trip")} / jízdu · ${cell("avg_fare_usd")} jízdné`
               + ` · ${cell("avg_distance_mi")} · ${cell("avg_duration_min")}</span>`,
             `<span class="r">${cell("speed_mph")} · ${cell("fare_per_mile")}</span>`,
@@ -331,9 +332,9 @@ function drawMap(host) {
 
 function buildDailyTable(m) {
   document.getElementById("daily-table").innerHTML =
-    "<thead><tr><th>Den</th><th class='num'>Jízdy</th><th class='num'>Tržby</th><th class='num'>Refundace</th></tr></thead><tbody>"
+    "<thead><tr><th>Den</th><th class='num'>Jízdy</th><th class='num'>Tržby</th><th class='num'>Hrubé</th><th class='num'>Storna</th></tr></thead><tbody>"
     + m.daily.map((d) =>
-      `<tr><td class="mono">${d.date}${isWeekend(d.date) ? " · víkend" : ""}</td><td class="num">${nf.format(d.trips)}</td><td class="num">${usd(d.revenue)}</td><td class="num">${usd(d.refunds)}</td></tr>`
+      `<tr><td class="mono">${d.date}${isWeekend(d.date) ? " · víkend" : ""}</td><td class="num">${nf.format(d.trips)}</td><td class="num">${usd(d.net_revenue)}</td><td class="num dim">${usd(d.revenue)}</td><td class="num dim">${usd(d.refunds)}</td></tr>`
     ).join("") + "</tbody>";
 }
 
@@ -365,14 +366,15 @@ function buildHeader() {
   ]);
 
   const trips = MONTHS.reduce((a, m) => a + m.trips, 0);
-  const revenue = MONTHS.reduce((a, m) => a + m.revenue, 0);
+  const revenue = MONTHS.reduce((a, m) => a + m.net_revenue, 0);
+  const refunds = MONTHS.reduce((a, m) => a + m.refunds, 0);
   // Nejvytíženější zóna se bere z mapy, protože ta jediná nese celou historii; měsíční
   // `zones` je jen top 25 za jeden měsíc.
   const busiest = DATA.map.zones.reduce((a, z) => (z.trips > a.trips ? z : a));
 
   buildTiles([
     { k: "Jízdy", v: nf1.format(trips / 1e6) + " mil.", s: nf.format(trips) + " za " + plural(MONTHS.length, "měsíc", "měsíce", "měsíců") },
-    { k: "Zaplacené jízdné", v: usdBig(revenue), s: "hrubé, včetně spropitného a mýtného" },
+    { k: "Zaplacené jízdné", v: usdBig(revenue), s: "po odečtení storen (" + pct(-refunds / (revenue - refunds)) + " objemu)" },
     { k: "Průměrná jízda", v: "$" + nf2.format(revenue / trips), s: "tržba na jízdu, celá historie" },
     { k: "Nejvytíženější nástup", v: busiest.zone, s: nf.format(busiest.trips) + " jízd · " + pct(busiest.trips / trips) + " ze všech", name: true },
   ]);

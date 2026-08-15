@@ -36,6 +36,8 @@ def test_penize_zustavaji_i_kdyz_je_mereni_rozbite(cfg, trips, zones):
     assert row["yellow_revenue_usd"] == 600.0
     # storno -5 a nezpoplatněná jízda 0; jízda z prosince se do ledna nepočítá vůbec
     assert row["refunds_usd"] == -5.0
+    # čistá tržba je součet obou -- hrubá se nikam neztrácí, jen už není headline
+    assert row["net_revenue_usd"] == 595.0
 
 
 def test_karantena_plus_publikovane_je_vstup(cfg, trips, zones):

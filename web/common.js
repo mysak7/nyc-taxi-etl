@@ -25,11 +25,18 @@ const pct = (v) => nf1.format(v * 100) + " %";
 const usdM = (v) => "$" + nf1.format(v / 1e6) + " mil.";
 // Zóny se v tržbě liší o šest řádů: Midtown miliardy, Rossville tisíce. Jedna jednotka
 // pro všechny by půlku legendy mapy proměnila v "$0.0M".
-const usdCompact = (v) =>
-  v >= 1e9 ? "$" + nf2.format(v / 1e9) + " mld."
-    : v >= 1e6 ? "$" + nf1.format(v / 1e6) + " mil."
-    : v >= 1e3 ? "$" + Math.round(v / 1e3) + " tis."
-    : "$" + Math.round(v);
+// Storna jsou záporná, takže se řád bere z absolutní hodnoty a znaménko se lepí zvlášť
+// -- jinak by "-480432" propadlo až do poslední větve a četlo se hůř než "-$480 tis.".
+const usdCompact = (v) => {
+  const sign = v < 0 ? "-" : "";
+  const a = Math.abs(v);
+  return sign + (
+    a >= 1e9 ? "$" + nf2.format(a / 1e9) + " mld."
+      : a >= 1e6 ? "$" + nf1.format(a / 1e6) + " mil."
+      : a >= 1e3 ? "$" + Math.round(a / 1e3) + " tis."
+      : "$" + Math.round(a)
+  );
+};
 // Přes miliardu už "3214 mil." nikdo nepřečte.
 const usdBig = (v) => (v >= 1e9 ? "$" + nf2.format(v / 1e9) + " mld." : "$" + nf.format(Math.round(v / 1e6)) + " mil.");
 const label = (m) => MONTH_NAMES[m.month - 1] + " " + m.year;
