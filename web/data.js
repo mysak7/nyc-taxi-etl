@@ -1,12 +1,12 @@
 /* Stránka pro čtenáře dat: mapa, měsíční řady, zóny. Nic o běhu pipeline -- provozní
    čísla, manifesty a prahy jsou na `pipeline.html` a payload je sem ani nedostane. */
 
-/* ---------- chart: the whole history ---------- */
+/* ---------- graf: celá historie ---------- */
 
 function drawHistory(host) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
   const H = 172;
-  const { svg, width } = svgRoot(host, H, "Published trips per source month across the whole dataset");
+  const { svg, width } = svgRoot(host, H, "Zveřejněné jízdy podle zdrojového měsíce za celý dataset");
   const L = 46, R = 8, T = 14, B = 36;
   const pw = width - L - R;
   const ph = H - T - B;
@@ -20,7 +20,7 @@ function drawHistory(host) {
   for (let t = 0; t <= 3; t++) {
     const v = (top / 3) * t;
     svg.appendChild(el("line", { x1: L, x2: L + pw, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 1 }));
-    svg.appendChild(el("text", { x: L - 9, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, t === 0 ? "0" : nf1.format(v / 1e6) + "M"));
+    svg.appendChild(el("text", { x: L - 9, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, t === 0 ? "0" : nf1.format(v / 1e6) + " mil."));
   }
 
   const every = Math.max(1, Math.ceil(MONTHS.length / Math.max(2, Math.floor(pw / 56))));
@@ -28,7 +28,7 @@ function drawHistory(host) {
   MONTHS.forEach((m, i) => {
     const x = L + i * slot + (slot - bw) / 2;
     const on = m.key === current;
-    // Selection is UI state, not a data category: the same hue, dimmed.
+    // Výběr je stav UI, ne kategorie dat: týž odstín, jen ztlumený.
     svg.appendChild(el("path", {
       d: barPathUp(x, y(m.trips), bw, ph - (y(m.trips) - T), 3),
       fill: "var(--s1)",
@@ -40,10 +40,10 @@ function drawHistory(host) {
     }
 
     const hit = el("rect", { x: L + i * slot, y: T, width: slot, height: ph, fill: "transparent", style: "cursor:pointer", role: "button", tabindex: 0 });
-    hit.appendChild(el("title", {}, label(m) + ": " + nf.format(m.trips) + " trips"));
+    hit.appendChild(el("title", {}, label(m) + ": " + nf.format(m.trips) + " jízd"));
     hit.addEventListener("mousemove", () => {
-      tip.innerHTML = `<b>${label(m)}</b><br>${nf.format(m.trips)} trips<br>`
-        + `<span class="r">${usdM(m.revenue)} revenue</span>`;
+      tip.innerHTML = `<b>${label(m)}</b><br>${nf.format(m.trips)} jízd<br>`
+        + `<span class="r">tržby ${usdM(m.revenue)}</span>`;
       placeTip(tip, host, ((L + i * slot + slot / 2) / width) * host.clientWidth, Math.max(0, ((y(m.trips) - 4) / H) * host.clientHeight - 64));
     });
     hit.addEventListener("mouseleave", () => { tip.hidden = true; });
@@ -55,13 +55,13 @@ function drawHistory(host) {
   host.appendChild(svg);
 }
 
-/* ---------- chart: daily line ---------- */
+/* ---------- graf: denní křivka ---------- */
 
 function drawDaily(host, m) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
   const days = m.daily;
   const H = 250;
-  const { svg, width } = svgRoot(host, H, "Trips per day for " + label(m));
+  const { svg, width } = svgRoot(host, H, "Jízdy po dnech za " + label(m));
   const L = 54, R = 14, T = 18, B = 30;
   const pw = width - L - R;
   const ph = H - T - B;
@@ -81,7 +81,7 @@ function drawDaily(host, m) {
   for (let t = 0; t <= 4; t++) {
     const v = (top / 4) * t;
     svg.appendChild(el("line", { x1: L, x2: L + pw, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 1 }));
-    svg.appendChild(el("text", { x: L - 10, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, t === 0 ? "0" : nf.format(Math.round(v / 1000)) + "k"));
+    svg.appendChild(el("text", { x: L - 10, y: y(v) + 4, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "end" }, t === 0 ? "0" : nf.format(Math.round(v / 1000)) + " tis."));
   }
 
   const line = days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d.trips).toFixed(1)}`).join(" ");
@@ -94,7 +94,7 @@ function drawDaily(host, m) {
     svg.appendChild(el("text", { x: x(i), y: H - 9, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 10.5, "text-anchor": "middle" }, dayLabel(d.date)));
   });
 
-  // Direct-label the peak only; a number on every point goes unread.
+  // Popiskem se označí jen vrchol; číslo u každého bodu si nikdo nepřečte.
   const peak = days.reduce((a, b, i) => (b.trips > days[a].trips ? i : a), 0);
   svg.appendChild(el("circle", { cx: x(peak), cy: y(days[peak].trips), r: 5, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2 }));
   const anchor = peak > days.length - 5 ? "end" : peak < 4 ? "start" : "middle";
@@ -115,8 +115,8 @@ function drawDaily(host, m) {
     const d = days[i];
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
     knob.setAttribute("cx", x(i)); knob.setAttribute("cy", y(d.trips)); knob.setAttribute("opacity", 1);
-    tip.innerHTML = `<b>${dayLabel(d.date)}</b>${isWeekend(d.date) ? " <span class='r'>weekend</span>" : ""}<br>`
-      + `${nf.format(d.trips)} trips<br><span class="r">revenue ${usd(d.revenue)}<br>refunds ${usd(d.refunds)}</span>`;
+    tip.innerHTML = `<b>${dayLabel(d.date)}</b>${isWeekend(d.date) ? " <span class='r'>víkend</span>" : ""}<br>`
+      + `${nf.format(d.trips)} jízd<br><span class="r">tržby ${usd(d.revenue)}<br>refundace ${usd(d.refunds)}</span>`;
     placeTip(tip, host, (x(i) / width) * host.clientWidth, Math.max(4, (y(d.trips) / H) * host.clientHeight - 84));
   });
 
@@ -130,7 +130,7 @@ function drawDaily(host, m) {
   buildDailyTable(m);
 }
 
-/* ---------- map: pickup zones ---------- */
+/* ---------- mapa: zóny nástupu ---------- */
 
 // Součty jdou sečíst, průměry ne -- vážený průměr přes zóny je v payloadu už spočítaný,
 // tady se jen vybírá sloupec a formátuje.
@@ -147,16 +147,16 @@ const ratio = (num, den, scale = 1) => (num != null && den ? (num / den) * scale
 const METRICS = {
   trips: {
     group: "totals",
-    label: "Published trips",
-    about: "Trips attributed to the pickup zone, summed over the whole history.",
+    label: "Zveřejněné jízdy",
+    about: "Jízdy přiřazené k zóně nástupu, sečtené přes celou historii.",
     of: (z) => z.trips,
-    full: (v) => nf.format(v) + " trips",
-    short: (v) => (v >= 1e6 ? nf1.format(v / 1e6) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : nf.format(v)),
+    full: (v) => nf.format(v) + " jízd",
+    short: (v) => (v >= 1e6 ? nf1.format(v / 1e6) + " mil." : v >= 1e3 ? Math.round(v / 1e3) + " tis." : nf.format(v)),
   },
   revenue: {
     group: "totals",
-    label: "Revenue",
-    about: "Gross <code>total_amount</code> of the published trips — tips, tolls and surcharges included. Refunds are reported separately and are not netted off.",
+    label: "Tržby",
+    about: "Hrubá <code>total_amount</code> zveřejněných jízd — včetně spropitného, mýtného a příplatků. Refundace se vykazují zvlášť a neodečítají se.",
     of: (z) => z.revenue,
     full: (v) => usd(v),
     brief: usdCompact,
@@ -164,48 +164,48 @@ const METRICS = {
   },
   revenue_per_trip: {
     group: "means",
-    label: "Revenue / trip",
-    about: "Revenue divided by trips. Every published row has a total, so this one denominator is exact — unlike the means below it, which are built on the rows that had a usable value.",
+    label: "Tržba / jízdu",
+    about: "Tržby dělené počtem jízd. Každý zveřejněný řádek má celkovou částku, takže tenhle jmenovatel je přesný — na rozdíl od průměrů pod ním, které stojí jen na řádcích s použitelnou hodnotou.",
     of: (z) => ratio(z.revenue, z.trips),
     full: (v) => "$" + nf2.format(v),
     short: (v) => "$" + nf1.format(v),
   },
   avg_fare_usd: {
     group: "means",
-    label: "Mean fare",
-    about: "<code>fare_amount</code> only: the metered fare, without tip, tolls or surcharges. Lower than revenue per trip everywhere, and the gap is itself the interesting part.",
+    label: "Průměrné jízdné",
+    about: "Jen <code>fare_amount</code>: jízdné z taxametru, bez spropitného, mýtného a příplatků. Všude nižší než tržba na jízdu — a zajímavý je právě ten rozdíl.",
     of: (z) => z.avg_fare_usd,
     full: (v) => "$" + nf2.format(v),
     short: (v) => "$" + Math.round(v),
   },
   avg_distance_mi: {
     group: "means",
-    label: "Mean distance",
-    about: "Miles per trip. The mean is pulled up by a handful of enormous rows — the table at the bottom of the page puts it next to the median.",
+    label: "Průměrná vzdálenost",
+    about: "Míle na jízdu. Průměr táhne nahoru hrstka obřích řádků — tabulka dole na stránce ho staví vedle mediánu.",
     of: (z) => z.avg_distance_mi,
     full: (v) => nf2.format(v) + " mi",
     short: (v) => nf1.format(v),
   },
   avg_duration_min: {
     group: "means",
-    label: "Mean duration",
-    about: "Minutes per trip, from pickup to dropoff. Non-positive durations are nulled by a quality rule, so they do not drag this down.",
+    label: "Průměrná doba jízdy",
+    about: "Minuty na jízdu, od nástupu po výstup. Nekladné doby jízdy vynuluje pravidlo kvality, takže tenhle průměr netáhnou dolů.",
     of: (z) => z.avg_duration_min,
     full: (v) => nf1.format(v) + " min",
     short: (v) => nf1.format(v),
   },
   speed_mph: {
     group: "ratios",
-    label: "Implied speed",
-    about: "Mean distance over mean duration — a ratio of two means, not the mean of per-trip speeds, and the two are built on different sets of rows. Where a zone's distance coverage sits far below its duration coverage the result is an artefact of that gap rather than a speed, which is why the tooltip carries both.",
+    label: "Odvozená rychlost",
+    about: "Průměrná vzdálenost dělená průměrnou dobou jízdy — podíl dvou průměrů, ne průměr rychlostí jednotlivých jízd, a každý z nich stojí na jiné množině řádků. Tam, kde je pokrytí vzdálenosti hluboko pod pokrytím doby jízdy, je výsledek spíš artefaktem toho rozdílu než rychlostí; proto bublina nese obě čísla.",
     of: (z) => ratio(z.avg_distance_mi, z.avg_duration_min, 60),
     full: (v) => nf1.format(v) + " mph",
     short: (v) => nf1.format(v),
   },
   fare_per_mile: {
     group: "ratios",
-    label: "Fare / mile",
-    about: "Mean fare over mean distance. High where trips are short and stop-start, low where they are long runs — the meter charges for time as well as distance.",
+    label: "Jízdné / míli",
+    about: "Průměrné jízdné dělené průměrnou vzdáleností. Vysoké tam, kde jsou jízdy krátké a popojíždí se, nízké na dlouhých tazích — taxametr účtuje čas stejně jako vzdálenost.",
     of: (z) => ratio(z.avg_fare_usd, z.avg_distance_mi),
     full: (v) => "$" + nf2.format(v) + " / mi",
     short: (v) => "$" + nf1.format(v),
@@ -249,7 +249,7 @@ function drawMap(host) {
   const svg = el("svg", {
     viewBox: `0 0 ${M.width} ${M.height}`,
     role: "img",
-    "aria-label": spec.label + " by pickup zone across the whole history",
+    "aria-label": spec.label + " podle zóny nástupu za celou historii",
   });
   // Bublina přežívá překreslení (visí na hostu, ne na SVG), takže po přepnutí metriky
   // je jinak vidět dál -- s čísly, co jsou napůl z předchozího pohledu.
@@ -265,11 +265,11 @@ function drawMap(host) {
     const known = value != null && isFinite(value);
     // Jméno z curated (tam ho pipeline joinovala z lookupu), a když zóna v curated
     // není, tak aspoň jméno ze shapefilu.
-    const named = z ? [z.zone, z.borough] : M.names[id] || ["zone " + id, ""];
+    const named = z ? [z.zone, z.borough] : M.names[id] || ["zóna " + id, ""];
 
     // Tři různé stavy, ne dva: zóna bez řádku v curated, zóna s jízdami ale bez
     // pozorování, ze kterého by šel průměr spočítat, a zóna s číslem.
-    const missing = z ? "no " + spec.label.toLowerCase() + " recorded" : "no trips in the data";
+    const missing = z ? "metrika \u201e" + spec.label.toLowerCase() + "\u201c není zaznamenaná" : "v datech žádné jízdy";
     // Bublina nese celý profil zóny, ne jen obarvenou metriku, a tučně je v něm to, čím
     // je zrovna obarveno. Přepínač tak nemění, co se dá přečíst -- jen kam se dívat.
     const cell = (key) => {
@@ -290,11 +290,11 @@ function drawMap(host) {
         ? [
             `<b>${named[0]}</b> · ${named[1]}`,
             `${cell("trips")} · ${cell("revenue")}`,
-            `<span class="r">${cell("revenue_per_trip")} / trip · ${cell("avg_fare_usd")} fare`
+            `<span class="r">${cell("revenue_per_trip")} / jízdu · ${cell("avg_fare_usd")} jízdné`
               + ` · ${cell("avg_distance_mi")} · ${cell("avg_duration_min")}</span>`,
             `<span class="r">${cell("speed_mph")} · ${cell("fare_per_mile")}</span>`,
-            `<span class="r">coverage ${orDash(z.coverage, pct)} distance`
-              + ` · ${orDash(z.duration_coverage, pct)} duration</span>`,
+            `<span class="r">pokrytí ${orDash(z.coverage, pct)} vzdálenost`
+              + ` · ${orDash(z.duration_coverage, pct)} doba jízdy</span>`,
           ].concat(known ? [] : [`<span class="r">${missing}</span>`]).join("<br>")
         : `<b>${named[0]}</b> · ${named[1]}<br><span class="r">${missing}</span>`;
       placeTip(tip, host, event.clientX - box.left, event.clientY - box.top - 104);
@@ -312,9 +312,9 @@ function drawMap(host) {
   document.getElementById("map-legend").innerHTML =
     `<div><div class="steps">${lows.map((_, i) => `<i style="background:var(--m${i + 1})"></i>`).join("")}</div>`
     + `<div class="edges">${lows.map((v) => `<span>${spec.short(v)}</span>`).join("")}</div></div>`
-    + `<span class="nodata"><i class="swatch" style="background:var(--m0)"></i>no trips in the data</span>`;
+    + `<span class="nodata"><i class="swatch" style="background:var(--m0)"></i>v datech žádné jízdy</span>`;
 
-  document.getElementById("map-title").textContent = spec.label + " by pickup zone";
+  document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu";
   document.getElementById("map-about").innerHTML = spec.about;
   document.querySelectorAll("#metric-picker .mbtn").forEach((btn) => {
     btn.setAttribute("aria-pressed", String(btn.dataset.metric === metric));
@@ -322,18 +322,18 @@ function drawMap(host) {
 
   const off = M.off_map;
   document.getElementById("map-foot").textContent =
-    Object.keys(M.paths).length + " zones · " + SPAN
-    + " (the whole history, not the month selected below) · " + nf.format(off.trips)
-    + " trips sit in " + off.zones + " codes that have no shape on any map (unknown, outside NYC)";
+    Object.keys(M.paths).length + " zón · " + SPAN
+    + " (celá historie, ne měsíc vybraný níž) · " + nf.format(off.trips)
+    + " jízd spadá do " + off.zones + " kódů, které na žádné mapě obrys nemají (neznámé, mimo NYC)";
 }
 
-/* ---------- tables ---------- */
+/* ---------- tabulky ---------- */
 
 function buildDailyTable(m) {
   document.getElementById("daily-table").innerHTML =
-    "<thead><tr><th>Day</th><th class='num'>Trips</th><th class='num'>Revenue</th><th class='num'>Refunds</th></tr></thead><tbody>"
+    "<thead><tr><th>Den</th><th class='num'>Jízdy</th><th class='num'>Tržby</th><th class='num'>Refundace</th></tr></thead><tbody>"
     + m.daily.map((d) =>
-      `<tr><td class="mono">${d.date}${isWeekend(d.date) ? " · weekend" : ""}</td><td class="num">${nf.format(d.trips)}</td><td class="num">${usd(d.revenue)}</td><td class="num">${usd(d.refunds)}</td></tr>`
+      `<tr><td class="mono">${d.date}${isWeekend(d.date) ? " · víkend" : ""}</td><td class="num">${nf.format(d.trips)}</td><td class="num">${usd(d.revenue)}</td><td class="num">${usd(d.refunds)}</td></tr>`
     ).join("") + "</tbody>";
 }
 
@@ -352,16 +352,16 @@ function buildZoneTable(m) {
   }).join("");
 }
 
-/* ---------- static parts ---------- */
+/* ---------- statické části ---------- */
 
 function buildHeader() {
   buildEyebrow();
 
   const f = DATA.freshness;
   buildChips([
-    { dot: "good", text: plural(MONTHS.length, "month") + " · " + SPAN },
-    { dot: "good", text: "newest month published by the city " + f.source_age_days + " days ago (" + f.source_newest + ")" },
-    { dot: "info", text: "built " + DATA.generated_at },
+    { dot: "good", text: plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN },
+    { dot: "good", text: "nejnovější měsíc město zveřejnilo před " + f.source_age_days + " dny (" + f.source_newest + ")" },
+    { dot: "info", text: "postaveno " + DATA.generated_at },
   ]);
 
   const trips = MONTHS.reduce((a, m) => a + m.trips, 0);
@@ -371,14 +371,14 @@ function buildHeader() {
   const busiest = DATA.map.zones.reduce((a, z) => (z.trips > a.trips ? z : a));
 
   buildTiles([
-    { k: "Trips", v: nf1.format(trips / 1e6) + "M", s: nf.format(trips) + " over " + plural(MONTHS.length, "month") },
-    { k: "Fares paid", v: usdBig(revenue), s: "gross, tips and tolls included" },
-    { k: "Average ride", v: "$" + nf2.format(revenue / trips), s: "revenue per trip, whole history" },
-    { k: "Busiest pickup", v: busiest.zone, s: nf.format(busiest.trips) + " trips · " + pct(busiest.trips / trips) + " of all", name: true },
+    { k: "Jízdy", v: nf1.format(trips / 1e6) + " mil.", s: nf.format(trips) + " za " + plural(MONTHS.length, "měsíc", "měsíce", "měsíců") },
+    { k: "Zaplacené jízdné", v: usdBig(revenue), s: "hrubé, včetně spropitného a mýtného" },
+    { k: "Průměrná jízda", v: "$" + nf2.format(revenue / trips), s: "tržba na jízdu, celá historie" },
+    { k: "Nejvytíženější nástup", v: busiest.zone, s: nf.format(busiest.trips) + " jízd · " + pct(busiest.trips / trips) + " ze všech", name: true },
   ]);
 
   document.getElementById("foot").textContent =
-    "Built " + DATA.generated_at + " from " + plural(MONTHS.length, "Parquet file") + " covering " + SPAN + ".";
+    "Postaveno " + DATA.generated_at + " z " + plural(MONTHS.length, "souboru Parquet", "souborů Parquet") + " pokrývajících " + SPAN + ".";
 }
 
 function buildMetricPicker() {
@@ -408,16 +408,16 @@ function render() {
   drawDaily(document.getElementById("daily"), m);
 
   document.getElementById("zones-cap").textContent =
-    "By published trips in " + label(m) + ", attributed to the pickup zone.";
+    "Podle zveřejněných jízd v " + label(m) + ", přiřazených k zóně nástupu.";
 
   const zones = m.zones.slice(0, 10).map((z) => ({
     label: z.zone,
     full: z.zone,
     value: z.trips,
     display: nf.format(z.trips),
-    tip: `${nf.format(z.trips)} trips · ${z.borough}<br><span class="r">${usdM(z.revenue)} revenue · mean ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}</span>`,
+    tip: `${nf.format(z.trips)} jízd · ${z.borough}<br><span class="r">tržby ${usdM(z.revenue)} · průměr ${orDash(z.avg_distance_mi, (v) => nf2.format(v) + " mi")}</span>`,
   }));
-  drawBars(document.getElementById("zones"), zones, { labelW: 170, valueW: 76, fill: "var(--s3)", title: "Pickup zones by trip count" });
+  drawBars(document.getElementById("zones"), zones, { labelW: 170, valueW: 76, fill: "var(--s3)", title: "Zóny nástupu podle počtu jízd" });
 
   buildZoneTable(m);
 }

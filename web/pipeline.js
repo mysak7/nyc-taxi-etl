@@ -1,13 +1,13 @@
 /* Stránka o provozu: manifesty, prahy, co pravidla chytila. Čísla o samotných jízdách
    jsou na `index.html` -- sem se z payloadu nedostane ani mapa, ani denní řady. */
 
-/* ---------- chart: row funnel ---------- */
+/* ---------- graf: trychtýř řádků ---------- */
 
 function drawFunnel(host, m) {
   host.querySelectorAll("svg").forEach((n) => n.remove());
   const run = m.runs[0];
   const H = 92;
-  const { svg, width } = svgRoot(host, H, "Input rows split into published and quarantined");
+  const { svg, width } = svgRoot(host, H, "Vstupní řádky rozdělené na zveřejněné a v karanténě");
   const pad = 2;
   const inner = width - pad * 2;
   const total = run.rows.input;
@@ -17,20 +17,20 @@ function drawFunnel(host, m) {
   const h = 26;
 
   svg.appendChild(el("path", { d: barPath(pad, y, pubW, h, 0), fill: "var(--s1)" }));
-  // A 2px gap in the surface colour separates the segments instead of an outline.
+  // Segmenty odděluje 2px mezera v barvě podkladu, ne obrys.
   svg.appendChild(el("path", { d: barPath(pad + pubW + 2, y, rejW, h, 4), fill: "var(--s2)" }));
 
   const share = ((run.rows.rejected / total) * 100).toFixed(2);
   svg.append(
     el("text", { x: pad, y: y - 9, fill: "var(--ink)", "font-family": "var(--mono)", "font-size": 12, "font-weight": 600 }, nf.format(run.rows.published)),
-    el("text", { x: pad, y: y + h + 17, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11 }, nf.format(total) + " input rows"),
+    el("text", { x: pad, y: y + h + 17, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11 }, nf.format(total) + " vstupních řádků"),
     el("text", { x: width - pad, y: y - 9, fill: "var(--ink-2)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.rejected) + " (" + share + " %)"),
-    el("text", { x: width - pad, y: y + h + 17, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.output) + " output rows")
+    el("text", { x: width - pad, y: y + h + 17, fill: "var(--ink-3)", "font-family": "var(--mono)", "font-size": 11, "text-anchor": "end" }, nf.format(run.rows.output) + " výstupních řádků")
   );
   host.appendChild(svg);
 }
 
-/* ---------- static parts ---------- */
+/* ---------- statické části ---------- */
 
 function specRows(hostId, rows) {
   document.getElementById(hostId).innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
@@ -41,9 +41,9 @@ function buildHeader() {
 
   const f = DATA.freshness;
   buildChips([
-    { dot: "good", text: "ingest gap: none" },
-    { dot: "good", text: "source published " + f.source_newest + ", " + f.source_age_days + " days ago (threshold " + CFG.source_stale_days + ")" },
-    { dot: "info", text: plural(MONTHS.length, "partition") + " · built " + DATA.generated_at },
+    { dot: "good", text: "mezera v příjmu dat: žádná" },
+    { dot: "good", text: "zdroj publikoval " + f.source_newest + ", před " + f.source_age_days + " dny (práh " + CFG.source_stale_days + ")" },
+    { dot: "info", text: plural(MONTHS.length, "partition") + " · postaveno " + DATA.generated_at },
   ]);
 
   const runs = MONTHS.flatMap((m) => m.runs);
@@ -56,37 +56,37 @@ function buildHeader() {
   const slowest = Math.max(...runs.map((r) => r.timing.seconds));
 
   buildTiles([
-    { k: "Source rows read", v: nf.format(Math.round(inputRows / 1e6)) + "M", s: "→ " + nf.format(rows) + " output rows" },
-    { k: "Quarantined", v: pct(rejected / inputRows), s: nf.format(rejected) + " rows, kept with a reason" },
-    { k: "Manifests", v: nf.format(runs.length), s: plural(runs.length, "run") + " across " + plural(MONTHS.length, "partition") },
-    { k: "Slowest run", v: nf1.format(slowest) + " s", s: "one source month, map concurrency 2" },
+    { k: "Přečtené zdrojové řádky", v: nf.format(Math.round(inputRows / 1e6)) + " mil.", s: "→ " + nf.format(rows) + " výstupních řádků" },
+    { k: "V karanténě", v: pct(rejected / inputRows), s: nf.format(rejected) + " řádků, ponechaných s důvodem" },
+    { k: "Manifesty", v: nf.format(runs.length), s: plural(runs.length, "běh", "běhy", "běhů") + " přes " + plural(MONTHS.length, "partition") },
+    { k: "Nejpomalejší běh", v: nf1.format(slowest) + " s", s: "jeden zdrojový měsíc, souběžnost map 2" },
   ]);
 
   document.getElementById("foot").textContent =
-    "Built " + DATA.generated_at + " from " + plural(runs.length, "manifest") + " and "
-    + plural(MONTHS.length, "Parquet file") + " covering " + SPAN + ".";
+    "Postaveno " + DATA.generated_at + " z " + plural(runs.length, "manifestu", "manifestů") + " a "
+    + plural(MONTHS.length, "souboru Parquet", "souborů Parquet") + " pokrývajících " + SPAN + ".";
 
   specRows("spec-run", [
-    ["Schedule", "daily, EventBridge Scheduler"],
-    ["Orchestrator", "AWS Step Functions"],
-    ["Worker", "Lambda container image"],
-    ["Map concurrency", "2"],
-    ["Lookback window", CFG.lookback_months + " months"],
-    ["Alternative runner", "Airflow 3 DAG, same image"],
-    ["Idempotence unit", "one source month"],
-    ["Partition write", "one file, one PUT"],
+    ["Plán", "denně, EventBridge Scheduler"],
+    ["Orchestrátor", "AWS Step Functions"],
+    ["Worker", "Lambda, kontejnerový image"],
+    ["Souběžnost map", "2"],
+    ["Okno zpětného pohledu", CFG.lookback_months + " měsíců"],
+    ["Alternativní runner", "Airflow 3 DAG, tentýž image"],
+    ["Jednotka idempotence", "jeden zdrojový měsíc"],
+    ["Zápis partition", "jeden soubor, jeden PUT"],
   ]);
 
   specRows("spec-dq", [
-    ["Quarantine ratio", "fail over " + CFG.max_reject_ratio * 100 + " %"],
-    ["Volume vs. previous month", "fail over ±" + CFG.max_volume_delta * 100 + " %"],
-    ["Nulled distance", "fail over " + CFG.max_null_ratio_distance * 100 + " %"],
-    ["Nulled duration", "fail over " + CFG.max_null_ratio_duration * 100 + " %"],
-    ["Implied speed", "≤ " + nf.format(CFG.max_speed_mph) + " mph"],
-    ["Distance fallback", "≤ " + nf.format(CFG.max_distance_mi) + " mi"],
-    ["Plausible duration", "≤ " + CFG.max_duration_min / 60 + " h"],
-    ["Source stale after", CFG.source_stale_days + " days"],
-    ["Schema contract", "checked before transform"],
+    ["Podíl karantény", "padá nad " + CFG.max_reject_ratio * 100 + " %"],
+    ["Objem proti předchozímu měsíci", "padá nad ±" + CFG.max_volume_delta * 100 + " %"],
+    ["Vynulovaná vzdálenost", "padá nad " + CFG.max_null_ratio_distance * 100 + " %"],
+    ["Vynulovaná doba jízdy", "padá nad " + CFG.max_null_ratio_duration * 100 + " %"],
+    ["Odvozená rychlost", "≤ " + nf.format(CFG.max_speed_mph) + " mph"],
+    ["Záchranná brzda vzdálenosti", "≤ " + nf.format(CFG.max_distance_mi) + " mi"],
+    ["Věrohodná doba jízdy", "≤ " + CFG.max_duration_min / 60 + " h"],
+    ["Zdroj je zastaralý po", CFG.source_stale_days + " dnech"],
+    ["Kontrakt schématu", "ověřen před transformací"],
   ]);
 }
 
@@ -111,8 +111,8 @@ function buildRuns() {
     </tr>`).join("");
 
   document.getElementById("runs-more").textContent = rows.length > RUN_LIMIT
-    ? "showing the " + RUN_LIMIT + " most recent of " + rows.length + " manifests"
-    : plural(rows.length, "manifest");
+    ? "zobrazeno " + RUN_LIMIT + " nejnovějších z " + rows.length + " manifestů"
+    : plural(rows.length, "manifest", "manifesty", "manifestů");
 
   document.querySelectorAll("#runs tr").forEach((tr) => {
     const pick = () => select(tr.dataset.key);
@@ -130,8 +130,8 @@ function render() {
 
   const run = m.runs[0];
   document.getElementById("funnel-cap").textContent =
-    label(m) + " — the most recent of " + plural(m.runs.length, "run")
-    + " for this partition, against source ETag " + run.source.etag.replace(/"/g, "") + ".";
+    label(m) + " — nejnovější z " + plural(m.runs.length, "běhu", "běhů")
+    + " téhle partition, proti zdrojovému ETagu " + run.source.etag.replace(/"/g, "") + ".";
 
   drawFunnel(document.getElementById("funnel"), m);
 
@@ -143,9 +143,9 @@ function render() {
       label: ruleLabel(k, applied),
       value: v,
       display: nf.format(v),
-      tip: `${nf.format(v)} rows · ${RULE_EFFECT[k] || "—"}<br><span class="r">${k}</span>`,
+      tip: `${nf.format(v)} řádků · ${RULE_EFFECT[k] || "—"}<br><span class="r">${k}</span>`,
     }));
-  drawBars(document.getElementById("rules"), rules, { labelW: 148, valueW: 74, fill: "var(--s3)", title: "Rows touched by each data quality rule" });
+  drawBars(document.getElementById("rules"), rules, { labelW: 148, valueW: 74, fill: "var(--s3)", title: "Řádky dotčené jednotlivými pravidly kvality dat" });
 }
 
 buildHeader();

@@ -1,14 +1,14 @@
 <header>
   <p class="eyebrow" id="src"></p>
-  <h1>Where New York takes a yellow cab</h1>
+  <h1>Kam si New York bere žlutý taxík</h1>
   <p class="lead">
-    Every yellow medallion taxi trip the city publishes, attributed to the zone it started
-    in and rolled up by day. Pick a metric, hover a zone, step through the months.
+    Každá jízda žlutého medailonového taxíku, kterou město zveřejnilo, přiřazená k zóně,
+    ve které začala, a sečtená po dnech. Vyberte metriku, najeďte na zónu, prolistujte měsíce.
   </p>
   <p class="lead">
-    Yellow cabs are one part of the city's for-hire market — about an eighth of what New
-    Yorkers spend on rides, and far less outside Manhattan. Read these numbers as the yellow
-    taxi, not as the whole street.
+    Žluté taxíky jsou jen část trhu placené přepravy — zhruba osmina toho, co New Yorčané
+    za jízdy utratí, a mimo Manhattan mnohem méně. Čtěte tahle čísla jako žlutý taxík,
+    ne jako celou ulici.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -19,23 +19,22 @@
 
 <section>
   <div class="sec-head">
-    <h2>The map</h2>
-    <p class="hint">eight metrics · whole history</p>
+    <h2>Mapa</h2>
+    <p class="hint">osm metrik · celá historie</p>
   </div>
   <p class="note">
-    Every trip carries the zone it was picked up in, so the data is already a map. The
-    outlines come from the city's taxi zone shapefile. Hover a zone to read its whole
-    profile, not just the metric it is coloured by.
+    Každá jízda nese zónu, ve které se nastupovalo, takže data už sama o sobě jsou mapa.
+    Obrysy pocházejí ze shapefilu taxi zón, který vydává město. Najeďte na zónu a přečtete
+    si celý její profil, ne jen metriku, podle které je obarvená.
   </p>
 
   <div class="card">
     <h3 id="map-title"></h3>
     <p class="cap">
-      Colour is a ranking: six bands holding the same number of zones each. An average built
-      on a handful of trips is a noisy average, so the tooltip always shows how many trips
-      it stands on.
+      Barva je pořadí: šest pásem, v každém stejný počet zón. Průměr postavený na hrstce
+      jízd je nespolehlivý průměr, a tak bublina vždy ukazuje, na kolika jízdách stojí.
     </p>
-    <div class="metrics" id="metric-picker" role="group" aria-label="Colour the map by"></div>
+    <div class="metrics" id="metric-picker" role="group" aria-label="Obarvit mapu podle"></div>
     <p class="cap" id="map-about"></p>
     <div class="ramp" id="map-legend"></div>
     <div class="plot map" id="zonemap"></div>
@@ -45,54 +44,54 @@
 
 <section>
   <div class="sec-head">
-    <h2>Month by month</h2>
+    <h2>Měsíc po měsíci</h2>
     <div class="picker">
-      <button class="step-btn" type="button" id="prev" aria-label="Previous month">◀</button>
-      <select id="month-select" aria-label="Select month"></select>
-      <button class="step-btn" type="button" id="next" aria-label="Next month">▶</button>
+      <button class="step-btn" type="button" id="prev" aria-label="Předchozí měsíc">◀</button>
+      <select id="month-select" aria-label="Vyberte měsíc"></select>
+      <button class="step-btn" type="button" id="next" aria-label="Následující měsíc">▶</button>
     </div>
   </div>
 
   <div class="card">
-    <h3>Trips per month</h3>
-    <p class="cap">Every month the city has published. Click a bar to load it below.</p>
+    <h3>Jízdy po měsících</h3>
+    <p class="cap">Každý měsíc, který město zveřejnilo. Kliknutím na sloupec ho načtete níž.</p>
     <div class="plot" id="history"></div>
   </div>
 
   <div class="card">
-    <h3>Trips per day</h3>
-    <p class="cap">Shaded bands are weekends — Saturday and Sunday ride differently, and the Monday step is the week starting, not an outage.</p>
+    <h3>Jízdy po dnech</h3>
+    <p class="cap">Podbarvené pruhy jsou víkendy — sobota a neděle se jezdí jinak a pondělní schod je začátek týdne, ne výpadek.</p>
     <div class="plot" id="daily"></div>
     <details>
-      <summary>Show as a table</summary>
+      <summary>Zobrazit jako tabulku</summary>
       <div class="scroll"><table id="daily-table"></table></div>
     </details>
   </div>
 
   <div class="card">
-    <h3>Busiest zones</h3>
+    <h3>Nejvytíženější zóny</h3>
     <p class="cap" id="zones-cap"></p>
     <div class="plot" id="zones"></div>
   </div>
 
   <div class="card">
-    <h3>The mean next to the median</h3>
+    <h3>Průměr vedle mediánu</h3>
     <p class="cap">
-      A handful of trips with implausible odometer readings pull the average distance up;
-      the median stays put. Coverage is the share of trips the average could actually be
-      measured on — read the mean with an eye on it.
+      Hrstka jízd s nevěrohodným stavem tachometru táhne průměrnou vzdálenost nahoru;
+      medián zůstává na místě. Pokrytí je podíl jízd, na kterých se průměr vůbec dal
+      změřit — čtěte průměr s okem na něm.
     </p>
     <div class="scroll">
       <table>
         <thead>
           <tr>
-            <th>Zone</th>
-            <th>Borough</th>
-            <th class="num">Trips</th>
-            <th class="num">Mean dist.</th>
-            <th class="num">Median</th>
-            <th class="num">Coverage</th>
-            <th class="num">Mean fare</th>
+            <th>Zóna</th>
+            <th>Obvod</th>
+            <th class="num">Jízdy</th>
+            <th class="num">Prům. vzdál.</th>
+            <th class="num">Medián</th>
+            <th class="num">Pokrytí</th>
+            <th class="num">Prům. jízdné</th>
           </tr>
         </thead>
         <tbody id="ztable"></tbody>
@@ -104,27 +103,27 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>How these numbers were decided</b> — which rows were refused and why, why the mean
-      and the median are published together, and what this output still gets wrong.
+      <b>Jak se o těchhle číslech rozhodlo</b> — které řádky byly odmítnuty a proč, proč se
+      průměr a medián zveřejňují spolu a co tenhle výstup pořád ještě neumí.
     </p>
-    <a href="method.html">Method &amp; data quality ▸</a>
+    <a href="method.html">Metodika a kvalita dat ▸</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Whether the data is current</b> — when the city last published, when this page was
-      last rebuilt, and what the pipeline did on each of its runs.
+      <b>Jestli jsou data aktuální</b> — kdy město naposledy publikovalo, kdy se tahle
+      stránka naposledy stavěla a co pipeline při každém svém běhu udělala.
     </p>
-    <a href="pipeline.html">Pipeline &amp; runs ▸</a>
+    <a href="pipeline.html">Pipeline a běhy ▸</a>
   </div>
 </section>
 
 <footer>
-  <p class="eyebrow">About this page</p>
+  <p class="eyebrow">O téhle stránce</p>
   <p class="note">
-    Source: the NYC Taxi &amp; Limousine Commission trip record data, aggregated by pickup
-    zone and pickup day. The page is static — the whole history is a few megabytes, so it
-    is baked into the file and nothing is fetched while you read it. Anyone who wants every
-    row reads the Parquet instead.
+    Zdroj: záznamy o jízdách newyorské Taxi &amp; Limousine Commission, agregované podle zóny
+    nástupu a dne nástupu. Stránka je statická — celá historie jsou jednotky megabajtů, takže
+    je zapečená v souboru a při čtení se nic nedotahuje. Kdo chce každý řádek, čte místo toho
+    Parquet.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

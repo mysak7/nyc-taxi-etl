@@ -1,14 +1,14 @@
 <header>
   <p class="eyebrow" id="src"></p>
-  <h1>How the numbers get made</h1>
+  <h1>Jak čísla vznikají</h1>
   <p class="lead">
-    The operational side of the same dataset: what the pipeline does on a given day, which rows
-    it refused, and which thresholds it was judged against. Every figure here comes from a
-    manifest the pipeline wrote next to its own output.
+    Provozní strana téhož datasetu: co pipeline v daný den udělá, které řádky odmítla a proti
+    kterým prahům se posuzovala. Každý údaj tady pochází z manifestu, který si pipeline
+    zapsala vedle vlastního výstupu.
   </p>
   <p class="lead">
-    A green run that quietly processed nothing is the failure mode worth catching, so the checks
-    below run on days with no work too.
+    Zelený běh, který tiše nezpracoval nic, je ten poruchový stav, který stojí za odchycení —
+    a proto kontroly níž běží i ve dnech, kdy není co dělat.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -19,106 +19,106 @@
 
 <section>
   <div class="sec-head">
-    <h2>The pipeline</h2>
-    <p class="hint">daily schedule · work decided by ETag</p>
+    <h2>Pipeline</h2>
+    <p class="hint">denní plán · práci určuje ETag</p>
   </div>
   <p class="note">
-    The source publishes monthly with a 26–85 day lag and <strong>rewrites files after the
-    fact</strong> — on 2026-03-25 it replaced December, January and February inside one
-    nine-minute window. So the daily run does not process "yesterday". It issues six HTTP HEAD
-    requests, compares ETags against what it already stored, and usually does nothing at all.
+    Zdroj publikuje po měsících se zpožděním 26–85 dní a <strong>přepisuje soubory
+    zpětně</strong> — 25. 3. 2026 nahradil prosinec, leden i únor během jednoho
+    devítiminutového okna. Denní běh proto nezpracovává „včerejšek“. Pošle šest HTTP HEAD
+    požadavků, porovná ETagy s tím, co už má uložené, a obvykle neudělá vůbec nic.
   </p>
 
   <div class="flow">
     <div class="step">
       <span class="n">detect</span>
-      <span class="d">HEAD every month in the lookback window and compare the ETag against the <code>_meta.json</code> stored beside the raw file.</span>
+      <span class="d">HEAD na každý měsíc v okně zpětného pohledu a porovnání ETagu proti <code>_meta.json</code> uloženému vedle surového souboru.</span>
     </div>
     <div class="arrow" aria-hidden="true">──▶</div>
     <div class="step">
       <span class="n">process</span>
-      <span class="d">Download, check the schema contract, join the zone lookup, aggregate, write one Parquet per partition.</span>
-      <span class="fan">fans out ×N</span>
+      <span class="d">Stáhnout, ověřit kontrakt schématu, přijoinovat číselník zón, agregovat, zapsat jeden Parquet na partition.</span>
+      <span class="fan">větví se ×N</span>
     </div>
     <div class="arrow" aria-hidden="true">──▶</div>
     <div class="step">
       <span class="n">check-freshness</span>
-      <span class="d">Does the source have a published month we have no output for? Runs even on days with no work.</span>
+      <span class="d">Má zdroj zveřejněný měsíc, ke kterému nemáme výstup? Běží i ve dnech, kdy není co dělat.</span>
     </div>
   </div>
 
   <div class="grid-2">
     <div class="card">
-      <h3>How it runs</h3>
-      <p class="cap">The same container image in both runners. Business logic lives in the application, not in the orchestrator.</p>
+      <h3>Jak to běží</h3>
+      <p class="cap">Tentýž kontejnerový image v obou runnerech. Byznysová logika žije v aplikaci, ne v orchestrátoru.</p>
       <dl class="spec" id="spec-run"></dl>
     </div>
     <div class="card">
-      <h3>Quality thresholds</h3>
-      <p class="cap">Derived from a measured baseline over the full history, not guessed. Every run records the thresholds that applied to it.</p>
+      <h3>Prahy kvality</h3>
+      <p class="cap">Odvozené ze změřené základní linie přes celou historii, ne odhadnuté. Každý běh zapisuje prahy, které pro něj platily.</p>
       <dl class="spec" id="spec-dq"></dl>
     </div>
   </div>
 
   <div class="card">
-    <h3>What happens when a run fails</h3>
-    <p class="cap">Three failures look identical from the outside — a red task. Only one of them is worth repeating.</p>
+    <h3>Co se stane, když běh selže</h3>
+    <p class="cap">Tři selhání vypadají zvenčí stejně — červená úloha. Opakovat se vyplatí jen jedno z nich.</p>
     <div class="scroll">
       <table>
-        <thead><tr><th>Error</th><th>Cause</th><th>Behaviour</th></tr></thead>
+        <thead><tr><th>Chyba</th><th>Příčina</th><th>Chování</th></tr></thead>
         <tbody>
           <tr>
             <td class="mono">TransientError</td>
-            <td class="dim wrap">5xx, timeout, connection reset</td>
-            <td class="wrap">Retry twice with exponential backoff</td>
+            <td class="dim wrap">5xx, timeout, reset spojení</td>
+            <td class="wrap">Dvakrát zopakovat s exponenciálním odstupem</td>
           </tr>
           <tr>
             <td class="mono">PermanentError</td>
-            <td class="dim wrap">403/404 — the month is not published yet</td>
-            <td class="wrap">Fail fast. <code>detect</code> never hands such a month to the mapper in the first place</td>
+            <td class="dim wrap">403/404 — měsíc ještě není zveřejněný</td>
+            <td class="wrap">Spadnout hned. <code>detect</code> takový měsíc mapperu vůbec nepředá</td>
           </tr>
           <tr>
             <td class="mono">DataQualityError</td>
-            <td class="dim wrap">A run threshold was exceeded</td>
-            <td class="wrap">Fail fast — a retry downloads the same bytes and fails the same way</td>
+            <td class="dim wrap">Byl překročen práh běhu</td>
+            <td class="wrap">Spadnout hned — opakování stáhne tytéž bajty a spadne stejně</td>
           </tr>
         </tbody>
       </table>
     </div>
     <p class="note" style="margin-top:14px">
-      A blanket <code>retries=3</code> would mean an unpublished month takes 45 minutes to die
-      and broken data gets computed four times. Alerts fire only once retries are exhausted, and
-      skipped tasks send nothing — otherwise everyone filters the channel within a week and
-      misses the one real incident.
+      Plošné <code>retries=3</code> by znamenalo, že nezveřejněný měsíc umírá 45 minut a
+      rozbitá data se počítají čtyřikrát. Alerty se pouštějí, až když jsou pokusy vyčerpané,
+      a přeskočené úlohy neposílají nic — jinak si do týdne všichni kanál odfiltrují a
+      minou ten jeden skutečný incident.
     </p>
   </div>
 </section>
 
 <section>
   <div class="sec-head">
-    <h2>Runs</h2>
-    <p class="hint">click a row to load that month below</p>
+    <h2>Běhy</h2>
+    <p class="hint">kliknutím na řádek načtete ten měsíc níž</p>
   </div>
   <p class="note">
-    One row is one <code>_runs/&lt;run_id&gt;.json</code> manifest sitting next to the output.
-    A manifest is written only after a successful write, so this table lists runs that finished
-    — failed executions live in Step Functions history, not here. Partitions get overwritten,
-    manifests accumulate, so "how many times was this month recomputed, and against which source
-    ETag" is a question you answer with <code>ls</code> rather than an incident review.
+    Jeden řádek je jeden manifest <code>_runs/&lt;run_id&gt;.json</code> ležící vedle výstupu.
+    Manifest se zapisuje až po úspěšném zápisu, takže tahle tabulka vypisuje běhy, které
+    doběhly — neúspěšná spuštění žijí v historii Step Functions, ne tady. Partition se
+    přepisují, manifesty přibývají, takže „kolikrát se tenhle měsíc přepočítal a proti kterému
+    zdrojovému ETagu“ je otázka, na kterou odpovíte <code>ls</code>, ne rozborem incidentu.
   </p>
   <div class="scroll">
     <table class="runs">
       <thead>
         <tr>
           <th>Partition</th>
-          <th>Trigger</th>
-          <th>Run</th>
-          <th class="num">Input rows</th>
-          <th class="num">Published</th>
-          <th class="num">Quarantined</th>
-          <th class="num">Output</th>
-          <th class="num">Time</th>
-          <th>Source ETag</th>
+          <th>Spouštěč</th>
+          <th>Běh</th>
+          <th class="num">Vstupní řádky</th>
+          <th class="num">Zveřejněno</th>
+          <th class="num">V karanténě</th>
+          <th class="num">Výstup</th>
+          <th class="num">Čas</th>
+          <th>ETag zdroje</th>
         </tr>
       </thead>
       <tbody id="runs"></tbody>
@@ -129,38 +129,38 @@
 
 <section>
   <div class="sec-head">
-    <h2>What the rules caught</h2>
+    <h2>Co pravidla chytila</h2>
     <div class="picker">
-      <button class="step-btn" type="button" id="prev" aria-label="Previous month">◀</button>
-      <select id="month-select" aria-label="Select month"></select>
-      <button class="step-btn" type="button" id="next" aria-label="Next month">▶</button>
+      <button class="step-btn" type="button" id="prev" aria-label="Předchozí měsíc">◀</button>
+      <select id="month-select" aria-label="Vyberte měsíc"></select>
+      <button class="step-btn" type="button" id="next" aria-label="Následující měsíc">▶</button>
     </div>
   </div>
 
   <div class="card">
-    <h3>Where the rows went</h3>
+    <h3>Kam řádky šly</h3>
     <p class="cap" id="funnel-cap"></p>
     <div class="legend">
-      <span><i class="swatch" style="background:var(--s1)"></i>published</span>
-      <span><i class="swatch" style="background:var(--s2)"></i>quarantined</span>
+      <span><i class="swatch" style="background:var(--s1)"></i>zveřejněno</span>
+      <span><i class="swatch" style="background:var(--s2)"></i>v karanténě</span>
     </div>
     <div class="plot" id="funnel"></div>
   </div>
 
   <div class="card">
-    <h3>Quality rules</h3>
-    <p class="cap">How many rows each rule touched. Counted independently — one row can break several rules at once, so these do not add up to the quarantine count above.</p>
+    <h3>Pravidla kvality</h3>
+    <p class="cap">Kolika řádků se které pravidlo dotklo. Počítá se nezávisle — jeden řádek může porušit několik pravidel naráz, takže součet nedá počet řádků v karanténě výš.</p>
     <div class="plot" id="rules"></div>
   </div>
 
   <div class="card">
-    <h3>Rejected rows keep their reason</h3>
-    <p class="cap">Nothing is deleted. What a rule refuses lands in a rejects Parquet next to the output.</p>
+    <h3>Odmítnuté řádky si nesou svůj důvod</h3>
+    <p class="cap">Nic se nemaže. Co pravidlo odmítne, přistane v Parquetu odmítnutých vedle výstupu.</p>
     <p class="note">
-      A row is quarantined only when no positive spend follows from it. A bad <em>value</em> is
-      nulled and left out of its own average, but neither the row nor its money is thrown away.
-      What that choice was measured against, and what dropping whole rows would have cost, is
-      on the <a href="method.html">method page</a>.
+      Do karantény jde řádek jen tehdy, když z něj neplyne žádná kladná útrata. Špatná
+      <em>hodnota</em> se vynuluje a vypadne ze svého vlastního průměru, ale nezahazuje se
+      ani řádek, ani jeho peníze. Proti čemu se to rozhodnutí měřilo a co by zahazování
+      celých řádků stálo, je na <a href="method.html">metodické stránce</a>.
     </p>
   </div>
 </section>
@@ -168,26 +168,26 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>The output itself</b> — 263 pickup zones on a map, eight metrics, daily series per month,
-      and the mean sitting next to the median it should be read against.
+      <b>Výstup samotný</b> — 263 zón nástupu na mapě, osm metrik, denní řady po měsících
+      a průměr sedící vedle mediánu, proti kterému se má číst.
     </p>
-    <a href="index.html">◂ The data</a>
+    <a href="index.html">◂ Data</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Why the rules are these rules</b> — what each threshold was measured against, what the
-      easier answer would have cost, and which limits the output still carries.
+      <b>Proč jsou pravidla právě taková</b> — proti čemu se každý práh měřil, co by snazší
+      odpověď stála a která omezení si výstup pořád nese.
     </p>
-    <a href="method.html">Method &amp; data quality ▸</a>
+    <a href="method.html">Metodika a kvalita dat ▸</a>
   </div>
 </section>
 
 <footer>
-  <p class="eyebrow">About this page</p>
+  <p class="eyebrow">O téhle stránce</p>
   <p class="note">
-    Built from the curated layer on S3 and served as a static page — the whole history is a few
-    megabytes, so it fits in the browser and needs no backend. Failed runs have no manifest;
-    those would be pulled from Step Functions history.
+    Postaveno z vrstvy curated na S3 a naservírováno jako statická stránka — celá historie
+    jsou jednotky megabajtů, takže se vejde do prohlížeče a žádný backend nepotřebuje.
+    Neúspěšné běhy manifest nemají; ty by se tahaly z historie Step Functions.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

@@ -12,34 +12,39 @@ const DATA = JSON.parse(document.getElementById("payload").textContent);
 const MONTHS = DATA.months;
 const CFG = DATA.config;
 
-const nf = new Intl.NumberFormat("en-US");
-const nf1 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const nf2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const nf = new Intl.NumberFormat("cs-CZ");
+const nf1 = new Intl.NumberFormat("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat("cs-CZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const MONTH_NAMES = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
 
 const usd = (v) => "$" + nf.format(Math.round(v));
 // Průměr bez pozorování přijde z buildu jako null. Pomlčka, ne "0.00" -- to by bylo
 // tvrzení o datech, které jsme neudělali.
 const orDash = (v, fn) => (v == null ? "—" : fn(v));
 const pct = (v) => nf1.format(v * 100) + " %";
-const usdM = (v) => "$" + nf1.format(v / 1e6) + "M";
+const usdM = (v) => "$" + nf1.format(v / 1e6) + " mil.";
 // Zóny se v tržbě liší o šest řádů: Midtown miliardy, Rossville tisíce. Jedna jednotka
 // pro všechny by půlku legendy mapy proměnila v "$0.0M".
 const usdCompact = (v) =>
-  v >= 1e9 ? "$" + nf2.format(v / 1e9) + "B"
-    : v >= 1e6 ? "$" + nf1.format(v / 1e6) + "M"
-    : v >= 1e3 ? "$" + Math.round(v / 1e3) + "k"
+  v >= 1e9 ? "$" + nf2.format(v / 1e9) + " mld."
+    : v >= 1e6 ? "$" + nf1.format(v / 1e6) + " mil."
+    : v >= 1e3 ? "$" + Math.round(v / 1e3) + " tis."
     : "$" + Math.round(v);
-// Přes miliardu už "3214M" nikdo nepřečte.
-const usdBig = (v) => (v >= 1e9 ? "$" + nf2.format(v / 1e9) + "B" : "$" + nf.format(Math.round(v / 1e6)) + "M");
+// Přes miliardu už "3214 mil." nikdo nepřečte.
+const usdBig = (v) => (v >= 1e9 ? "$" + nf2.format(v / 1e9) + " mld." : "$" + nf.format(Math.round(v / 1e6)) + " mil.");
 const label = (m) => MONTH_NAMES[m.month - 1] + " " + m.year;
 const dayOf = (iso) => new Date(iso + "T00:00:00");
 const isWeekend = (iso) => [0, 6].includes(dayOf(iso).getDay());
-const dayLabel = (iso) => { const d = dayOf(iso); return MONTH_NAMES[d.getMonth()] + " " + d.getDate(); };
+const dayLabel = (iso) => { const d = dayOf(iso); return d.getDate() + ". " + MONTH_NAMES[d.getMonth()]; };
 
-// Stránka se staví i nad jedinou partition (čerstvý bucket, lokální běh), a "1 months"
+// Stránka se staví i nad jedinou partition (čerstvý bucket, lokální běh), a "1 měsíců"
 // nebo "2025-01 → 2025-01" vypadá jako rozbité číslo, ne jako malý dataset.
-const plural = (n, one, many) => nf.format(n) + " " + (n === 1 ? one : many || one + "s");
+//
+// Čeština má tři tvary, ne dva: 1 měsíc, 3 měsíce, 5 měsíců. Vyšší tvary mají default
+// na ten nižší, takže se dají vypustit tam, kde jsou shodné -- u genitivu (1 souboru,
+// 3 souborů, 5 souborů) i u nesklonných výrazů, kde stačí jediný tvar.
+const plural = (n, one, few, many) =>
+  nf.format(n) + " " + (n === 1 ? one : n >= 2 && n <= 4 ? few || one : many || few || one);
 const SPAN = MONTHS.length > 1 ? MONTHS[0].key + " → " + MONTHS[MONTHS.length - 1].key : MONTHS[0].key;
 
 let current = MONTHS[MONTHS.length - 1].key;
@@ -63,25 +68,25 @@ function select(key) {
    z aktuální konfigurace. Když se práh změní, starý běh se pořád popisuje tím, podle
    čeho se doopravdy řídil. */
 const RULE_LABELS = {
-  negative_fare: () => "negative fare",
-  zero_distance: () => "zero distance",
-  nonpositive_total: () => "non-positive total",
-  nonpositive_duration: () => "non-positive duration",
-  out_of_month: () => "pickup out of month",
-  duration_over_limit: (t) => (t.max_duration_min ? "duration over " + t.max_duration_min / 60 + " h" : "duration over limit"),
-  implausible_distance: (t) => (t.max_distance_mi ? "distance over " + nf.format(t.max_distance_mi) + " mi" : "implausible distance"),
-  impossible_speed: (t) => (t.max_speed_mph ? "implied speed over " + nf.format(t.max_speed_mph) + " mph" : "impossible speed"),
+  negative_fare: () => "záporné jízdné",
+  zero_distance: () => "nulová vzdálenost",
+  nonpositive_total: () => "nekladná celková částka",
+  nonpositive_duration: () => "nekladná doba jízdy",
+  out_of_month: () => "vyzvednutí mimo měsíc",
+  duration_over_limit: (t) => (t.max_duration_min ? "doba jízdy přes " + t.max_duration_min / 60 + " h" : "doba jízdy přes limit"),
+  implausible_distance: (t) => (t.max_distance_mi ? "vzdálenost přes " + nf.format(t.max_distance_mi) + " mi" : "nevěrohodná vzdálenost"),
+  impossible_speed: (t) => (t.max_speed_mph ? "odvozená rychlost přes " + nf.format(t.max_speed_mph) + " mph" : "nemožná rychlost"),
 };
 
 const RULE_EFFECT = {
-  nonpositive_total: "quarantined",
-  out_of_month: "quarantined",
-  negative_fare: "field nulled",
-  zero_distance: "field nulled",
-  nonpositive_duration: "field nulled",
-  duration_over_limit: "field nulled",
-  implausible_distance: "field nulled",
-  impossible_speed: "field nulled",
+  nonpositive_total: "karanténa",
+  out_of_month: "karanténa",
+  negative_fare: "pole vynulováno",
+  zero_distance: "pole vynulováno",
+  nonpositive_duration: "pole vynulováno",
+  duration_over_limit: "pole vynulováno",
+  implausible_distance: "pole vynulováno",
+  impossible_speed: "pole vynulováno",
 };
 
 // Které pole pravidlo vynuluje. Tabulka pravidel na metodické stránce to ukazuje vedle
@@ -114,14 +119,14 @@ function svgRoot(host, height, title) {
   return { svg, width, height };
 }
 
-// Mono 11px is ~6.6px per glyph. Truncate by available space, not by character count,
-// or a long label escapes the viewBox on the left inside a narrow card.
+// Mono 11px má ~6,6 px na znak. Zkracuje se podle místa, ne podle počtu znaků -- jinak
+// dlouhý popisek v úzké kartě uteče vlevo mimo viewBox.
 function fit(text, px) {
   const max = Math.floor(px / 6.6);
   return text.length <= max ? text : text.slice(0, Math.max(1, max - 1)) + "…";
 }
 
-// Rounded corners on the data end only; the other end sits flat on the baseline.
+// Zaoblený je jen konec s daty; druhý sedí naplocho na základní čáře.
 function barPath(x, y, w, h, r) {
   if (w <= 0.5) return `M${x},${y} h0.5 v${h} h-0.5 Z`;
   const rr = Math.min(r, w, h / 2);
@@ -193,7 +198,7 @@ function drawBars(host, items, opts) {
 function buildEyebrow() {
   // Bez jména bucketu: to nese číslo AWS účtu a stránka je veřejná.
   document.getElementById("src").textContent =
-    "nyc-taxi-etl · dataset=" + DATA.dataset + " · curated on " + DATA.source.store
+    "nyc-taxi-etl · dataset=" + DATA.dataset + " · curated na " + DATA.source.store
     + " (" + DATA.source.region + ")";
 }
 

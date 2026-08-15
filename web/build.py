@@ -51,6 +51,7 @@ TOP_ZONES = 25
 # Kostra je společná, liší se jen title, tělo a skript. Bez `<head>`: prohlížeč si ho
 # doplní sám a jediné, co by v něm bylo, je `<title>` a `<style>`, které platí i takhle.
 SHELL = """<!doctype html>
+<html lang="cs">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
@@ -67,29 +68,29 @@ __BODY__
 
 # Odkazy jsou relativní bez lomítka, takže stránky fungují i otevřené z disku, a zároveň
 # sedí, když Cloudflare Pages naservíruje `pipeline.html` na `/pipeline`.
-NAV = (("index.html", "Data"), ("method.html", "Method"), ("pipeline.html", "Pipeline"))
+NAV = (("index.html", "Data"), ("method.html", "Metodika"), ("pipeline.html", "Pipeline"))
 
 PAGES = {
     # jméno souboru -> (zdrojová dvojice, title, popis, klíče měsíců v payloadu)
     "index.html": (
         "data",
-        "NYC Yellow Taxi by zone",
-        "Yellow medallion taxi trips in New York, by pickup zone and by day.",
+        "Žluté taxíky NYC po zónách",
+        "Jízdy žlutých medailonových taxíků v New Yorku podle zóny nástupu a podle dne.",
         ("key", "year", "month", "trips", "revenue", "daily", "zones", "zones_total"),
     ),
     # Metodická stránka počítá z manifestů totéž co provozní, jen přes celou historii
     # místo jednoho běhu -- proto tytéž klíče a žádná mapa ani denní řady.
     "method.html": (
         "method",
-        "NYC Taxi data quality: the arguments",
-        "Why the published numbers look the way they do: what the easy answer would have"
-        " cost, which thresholds were measured, and what the output still gets wrong.",
+        "Kvalita dat NYC Taxi: polemika",
+        "Proč zveřejněná čísla vypadají, jak vypadají: co by stála snadná odpověď, které"
+        " prahy se změřily a co výstup pořád ještě neumí.",
         ("key", "year", "month", "rows", "trips", "runs"),
     ),
     "pipeline.html": (
         "pipeline",
-        "NYC Taxi pipeline & data quality",
-        "How the NYC taxi dataset is built: runs, manifests, quality rules and thresholds.",
+        "Pipeline a kvalita dat NYC Taxi",
+        "Jak dataset newyorských taxíků vzniká: běhy, manifesty, pravidla kvality a prahy.",
         ("key", "year", "month", "rows", "trips", "runs"),
     ),
 }
