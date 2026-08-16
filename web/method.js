@@ -167,9 +167,11 @@ function buildHeader() {
   buildTiles([
     { k: "Platná pravidla", v: nf.format(ruleNames.size), s: wholeRow + " bere celý řádek · " + (ruleNames.size - wholeRow) + " odmítá jedno pole" },
     { k: "Posouzené zdrojové řádky", v: nf1.format(INPUT / 1e6) + " mil.", s: "každý řádek období " + SPAN + " jimi prošel" },
-    { k: "Řádky v karanténě", v: pct(rejected / INPUT), s: nf.format(rejected) + " řádků, každý se svým důvodem" },
-    { k: "Stornované řádky", v: pct(reversed / INPUT), s: nf.format(reversed) + " protizápisů, peníze jdou do refunds_usd" },
-    { k: "Vynulovaná pole", v: nf.format(nulled), s: "hodnoty zahozeny, řádky i peníze zůstávají" },
+    // Rozsah patří do nadpisu i tady, kde je hodnota podíl: pod ním stojí počet za celou
+    // historii, a ten se v žádném jednotlivém měsíci najít nedá.
+    { k: "Řádky v karanténě" + SUM_SCOPE, v: pct(rejected / INPUT), s: nf.format(rejected) + " řádků, každý se svým důvodem" },
+    { k: "Stornované řádky" + SUM_SCOPE, v: pct(reversed / INPUT), s: nf.format(reversed) + " protizápisů, peníze jdou do refunds_usd" },
+    { k: "Vynulovaná pole" + SUM_SCOPE, v: nf.format(nulled), s: "hodnoty zahozeny, řádky i peníze zůstávají" },
   ]);
 
   specRows("spec-sev", [

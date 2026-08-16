@@ -61,8 +61,8 @@ function buildHeader() {
   const slowest = Math.max(...runs.map((r) => r.timing.seconds));
 
   buildTiles([
-    { k: "Přečtené zdrojové řádky", v: nf.format(Math.round(inputRows / 1e6)) + " mil.", s: "→ " + nf.format(rows) + " výstupních řádků" },
-    { k: "V karanténě", v: pct(rejected / inputRows), s: nf.format(rejected) + " řádků · " + nf.format(reversed) + " dalších je storno, ne vada" },
+    { k: "Přečtené zdrojové řádky" + SUM_SCOPE, v: nf.format(Math.round(inputRows / 1e6)) + " mil.", s: "→ " + nf.format(rows) + " výstupních řádků" },
+    { k: "V karanténě" + SUM_SCOPE, v: pct(rejected / inputRows), s: nf.format(rejected) + " řádků · " + nf.format(reversed) + " dalších je storno, ne vada" },
     { k: "Manifesty", v: nf.format(runs.length), s: plural(runs.length, "běh", "běhy", "běhů") + " přes " + plural(MONTHS.length, "partition") },
     { k: "Nejpomalejší běh", v: nf1.format(slowest) + " s", s: "jeden zdrojový měsíc, souběžnost map 2" },
   ]);

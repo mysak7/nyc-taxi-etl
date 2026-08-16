@@ -240,15 +240,41 @@ function buildHeader() {
     { dot: "info", text: plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN },
   ]);
 
-  const nulled = LATEST.reduce((a, r) => a + Object.values(r.nulled).reduce((b, v) => b + v, 0), 0);
+  const nulledOf = (run) => Object.values(run.nulled).reduce((a, v) => a + v, 0);
+  const nulled = LATEST.reduce((a, r) => a + nulledOf(r), 0);
   const refunds = MONTHS.reduce((a, m) => a + (m.refunds || 0), 0);
 
+  // Hodnota je součet celé historie, popisek pod ní překládá součet na jeden měsíc:
+  // 695 řádků karantény je za 29 měsíců, v jednom jich je dvacet. Bez toho druhého
+  // řádku si čtenář jde do měsíčního rozpisu níž hledat číslo, které tam být nemůže.
   buildTiles([
-    { k: "Řádky v karanténě", v: nf.format(REJECTED), s: pct2(share(REJECTED, INPUT) || 0) + " z " + nf.format(INPUT) + " vstupních řádků" },
-    { k: "Stornované řádky", v: nf.format(REVERSED), s: pct2(share(REVERSED, INPUT) || 0) + " vstupu · protizápisy, ne vada" },
-    { k: "Objem storn", v: refunds ? usdCompact(refunds) : "—", s: "odečteno od hrubé tržby v net_revenue_usd" },
-    { k: "Vynulovaná pole", v: nf.format(nulled), s: "hodnota zahozena, řádek i jeho peníze zůstávají" },
+    {
+      k: "Karanténa" + SUM_SCOPE,
+      v: nf.format(REJECTED),
+      s: dots(pct2(share(REJECTED, INPUT) || 0) + " vstupu", spread(LATEST.map((r) => r.rows.rejected), nf.format)),
+    },
+    {
+      k: "Storna" + SUM_SCOPE,
+      v: nf.format(REVERSED),
+      s: dots(pct2(share(REVERSED, INPUT) || 0) + " vstupu", spread(LATEST.map(reversedOf), nf.format)),
+    },
+    {
+      k: "Objem storn" + SUM_SCOPE,
+      v: refunds ? usdCompact(refunds) : "—",
+      s: dots(refunds ? spread(MONTHS.map((m) => m.refunds || 0), usdCompact) : "", "odečteno od hrubé tržby"),
+    },
+    {
+      k: "Vynulovaná pole" + SUM_SCOPE,
+      v: nf.format(nulled),
+      s: dots(spread(LATEST.map(nulledOf), nf.format), "řádek i peníze zůstávají"),
+    },
   ]);
+
+  document.getElementById("kpis-cap").textContent = MONTHS.length > 1
+    ? "Součty za " + MONTHS_LABEL + " (" + SPAN + "), ne za vybraný měsíc — druhý řádek každé"
+      + " dlaždice říká, v jakém rozpětí se drží jeden měsíc. Konkrétní měsíc má vlastní"
+      + " řádek v tabulce níž."
+    : "Jediná zpracovaná partition " + SPAN + ".";
 
   document.getElementById("reject-limit").textContent = pct(CFG.max_reject_ratio) + " vstupních řádků";
   document.getElementById("reversal-limit").textContent = pct(CFG.max_reversal_ratio) + " vstupních řádků";
