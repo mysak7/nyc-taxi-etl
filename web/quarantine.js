@@ -26,6 +26,7 @@ const STACK_FILL = { reversal: "var(--s2)", out_of_month: "var(--s3)" };
 
 const ruleCount = (run, name) => run.rules[name] || 0;
 const nulledCount = (run, column) => run.nulled[column] || 0;
+const nulledOf = (run) => Object.values(run.nulled).reduce((a, v) => a + v, 0);
 const share = (part, whole) => (whole > 0 ? part / whole : null);
 // Podíly karantény jsou desetiny procenta, `pct` s jedním desetinným místem by z půlky
 // měsíců udělalo "0,1 %" a řada by vypadala plochá.
@@ -203,6 +204,37 @@ function buildMonths() {
   });
 }
 
+/* ---------- dlaždice vybraného měsíce ---------- */
+
+/* Dlaždice popisují vybraný měsíc, ne celou historii. Součet za celé období tady stál
+   nad stránkou, která je od druhé sekce dolů o jednom měsíci, a jediné, co s ním šlo
+   udělat, bylo jít ho hledat do měsíčního rozpisu -- kde nikdy být nemůže.
+
+   Součty tím nemizí: leží v řádku "celkem" v tabulce níž, kde stojí sloupec vedle
+   sloupce a dají se číst proti jednotlivým měsícům. To je jejich místo. */
+function buildTilesFor(m, run) {
+  const input = run.rows.input;
+  // Průměr měsíce, ne součet: sám počet za jeden měsíc neříká, jestli je vysoký. Nad
+  // jedinou partition se vynechá -- průměr jednoho měsíce je ten měsíc.
+  const mean = (pick) => (MONTHS.length > 1 ? "průměr měsíců " + nf.format(Math.round(LATEST.reduce((a, r) => a + pick(r), 0) / LATEST.length)) : "");
+  const meanMoney = () =>
+    MONTHS.length > 1 ? "průměr měsíců " + usdCompact(MONTHS.reduce((a, x) => a + (x.refunds || 0), 0) / MONTHS.length) : "";
+  const of = (count) => pct2(share(count, input) || 0) + " vstupu";
+
+  buildTiles([
+    { k: "Karanténa · " + label(m), v: nf.format(run.rows.rejected), s: dots(of(run.rows.rejected), mean((r) => r.rows.rejected)) },
+    { k: "Storna · " + label(m), v: nf.format(reversedOf(run)), s: dots(of(reversedOf(run)), mean(reversedOf)) },
+    { k: "Objem storn · " + label(m), v: m.refunds ? usdCompact(m.refunds) : "—", s: dots(meanMoney(), "odečteno od hrubé tržby") },
+    { k: "Vynulovaná pole · " + label(m), v: nf.format(nulledOf(run)), s: dots(mean(nulledOf), "řádek i peníze zůstávají") },
+  ]);
+
+  document.getElementById("kpis-cap").textContent = MONTHS.length > 1
+    ? label(m) + " — vybraný měsíc. Přepnete ho kliknutím na sloupec grafu, na řádek"
+      + " tabulky níž, nebo přepínačem u rozpisu. Součet za celé období (" + SPAN + ")"
+      + " je v řádku „celkem“ v tabulce."
+    : "Jediná zpracovaná partition " + SPAN + ".";
+}
+
 /* ---------- statické části ---------- */
 
 function buildHeader() {
@@ -240,42 +272,6 @@ function buildHeader() {
     { dot: "info", text: plural(MONTHS.length, "měsíc", "měsíce", "měsíců") + " · " + SPAN },
   ]);
 
-  const nulledOf = (run) => Object.values(run.nulled).reduce((a, v) => a + v, 0);
-  const nulled = LATEST.reduce((a, r) => a + nulledOf(r), 0);
-  const refunds = MONTHS.reduce((a, m) => a + (m.refunds || 0), 0);
-
-  // Hodnota je součet celé historie, popisek pod ní překládá součet na jeden měsíc:
-  // 695 řádků karantény je za 29 měsíců, v jednom jich je dvacet. Bez toho druhého
-  // řádku si čtenář jde do měsíčního rozpisu níž hledat číslo, které tam být nemůže.
-  buildTiles([
-    {
-      k: "Karanténa" + SUM_SCOPE,
-      v: nf.format(REJECTED),
-      s: dots(pct2(share(REJECTED, INPUT) || 0) + " vstupu", spread(LATEST.map((r) => r.rows.rejected), nf.format)),
-    },
-    {
-      k: "Storna" + SUM_SCOPE,
-      v: nf.format(REVERSED),
-      s: dots(pct2(share(REVERSED, INPUT) || 0) + " vstupu", spread(LATEST.map(reversedOf), nf.format)),
-    },
-    {
-      k: "Objem storn" + SUM_SCOPE,
-      v: refunds ? usdCompact(refunds) : "—",
-      s: dots(refunds ? spread(MONTHS.map((m) => m.refunds || 0), usdCompact) : "", "odečteno od hrubé tržby"),
-    },
-    {
-      k: "Vynulovaná pole" + SUM_SCOPE,
-      v: nf.format(nulled),
-      s: dots(spread(LATEST.map(nulledOf), nf.format), "řádek i peníze zůstávají"),
-    },
-  ]);
-
-  document.getElementById("kpis-cap").textContent = MONTHS.length > 1
-    ? "Součty za " + MONTHS_LABEL + " (" + SPAN + "), ne za vybraný měsíc — druhý řádek každé"
-      + " dlaždice říká, v jakém rozpětí se drží jeden měsíc. Konkrétní měsíc má vlastní"
-      + " řádek v tabulce níž."
-    : "Jediná zpracovaná partition " + SPAN + ".";
-
   document.getElementById("reject-limit").textContent = pct(CFG.max_reject_ratio) + " vstupních řádků";
   document.getElementById("reversal-limit").textContent = pct(CFG.max_reversal_ratio) + " vstupních řádků";
 
@@ -306,6 +302,7 @@ function render() {
   const m = month();
   const run = LATEST[idx()];
   syncPicker();
+  buildTilesFor(m, run);
   document.querySelectorAll("#months tr").forEach((tr) => tr.classList.toggle("on", tr.dataset.key === current));
 
   drawStack(document.getElementById("stack"), stackCols(), {

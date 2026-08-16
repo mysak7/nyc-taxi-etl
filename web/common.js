@@ -70,12 +70,8 @@ const MONTHS_LABEL = plural(MONTHS.length, "měsíc", "měsíce", "měsíců");
 // Nad jedinou partition se nepřipisuje nic -- "za 1 měsíc" je šum, žádná jiná volba není.
 const SUM_SCOPE = MONTHS.length > 1 ? " · " + MONTHS_LABEL : "";
 
-// A druhá půlka téhož: součet sám o sobě neříká, co čekat v jednom měsíci. Rozpětí od
-// nejmenšího po největší měsíc je to jediné, co ten překlad udělá bez počítání.
-const spread = (values, fmt) =>
-  values.length > 1 ? "měsíčně " + fmt(Math.min(...values)) + " až " + fmt(Math.max(...values)) : "";
-
-// Popisky dlaždic se skládají z dílů, které někdy chybí (jediná partition nemá rozpětí).
+// Popisky dlaždic se skládají z dílů, které někdy chybí (nad jedinou partition není
+// s čím měsíc porovnat).
 const dots = (...parts) => parts.filter(Boolean).join(" · ");
 
 let current = MONTHS[MONTHS.length - 1].key;
