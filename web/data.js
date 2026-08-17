@@ -416,15 +416,27 @@ function drawMap(host, m) {
   // Sada `--m1..--m6` je pořád sekvenční, jednoodstínová -- mění se jen který odstín.
   document.documentElement.dataset.ramp = spec.group;
 
-  // Pásma se počítají jen z hodnot, které něco znamenají. Kdyby do kvantilů spadly i
-  // zóny pod prahem, určovaly by hranice barev čísla, kterým sama stránka nevěří.
+  /* Dvě množiny, protože práh a barva jsou dvě různá rozhodnutí.
+
+     `known` je všechno, co se vůbec dalo spočítat, a určuje pásma. `shown` je to nad
+     prahem a určuje, co dostane barvu. Kdyby pásma stála na `shown`, tažení posuvníku by
+     přebarvovalo i zóny, které v mapě zůstávají: hranice by se posunuly, Midtown by
+     přeskočil o odstín a legenda pod rukou měnila čísla. Odstín by pak neznamenal "tolik
+     mil na jízdu", ale "tolik mil na jízdu při téhle poloze posuvníku".
+
+     Platí se za to tím, že pásma zná i hodnoty, kterým stránka nevěří. Kvantil je ale
+     řadová statistika -- hrstka nevěrohodných zón hranicemi pohne o kousek, nepřevrátí
+     je -- a šedá pořád říká, které to jsou. Stabilní význam barvy je za to lepší koupě. */
+  const known = new Map();
   const shown = new Map();
-  for (const [id] of Object.entries(MAP.paths)) {
+  for (const id of DRAWN) {
     const i = ZIDX.get(id);
-    if (i !== undefined && solid(aggs[i], floor)) shown.set(id, spec.value(aggs[i]));
+    if (i === undefined) continue;
+    if (solid(aggs[i], 0)) known.set(id, spec.value(aggs[i]));
+    if (solid(aggs[i], floor)) shown.set(id, spec.value(aggs[i]));
   }
-  const edges = quantileEdges([...shown.values()], BUCKETS);
-  const lows = [Math.min(...shown.values()), ...edges];
+  const edges = quantileEdges([...known.values()], BUCKETS);
+  const lows = [Math.min(...known.values()), ...edges];
 
   const svg = el("svg", {
     viewBox: `0 0 ${MAP.width} ${MAP.height}`,
@@ -442,7 +454,7 @@ function drawMap(host, m) {
   for (const [id, d] of Object.entries(MAP.paths)) {
     const i = ZIDX.get(id);
     const a = i === undefined ? null : aggs[i];
-    const known = shown.has(id);
+    const lit = shown.has(id);
     // Jméno z curated (tam ho pipeline joinovala z lookupu), a když zóna v curated
     // není, tak aspoň jméno ze shapefilu.
     const named = i === undefined ? MAP.names[id] || ["zóna " + id, ""] : [MAP.zone[i], MAP.borough[i]];
@@ -465,8 +477,8 @@ function drawMap(host, m) {
       const text = v == null || !isFinite(v) ? "—" : (s.brief || s.full)(v);
       return key === metric ? `<b>${text}</b>` : text;
     };
-    const shape = el("path", { d, fill: known ? `var(--m${bucketOf(shown.get(id), edges) + 1})` : "var(--m0)" });
-    shape.appendChild(el("title", {}, named[0] + ": " + (known ? spec.full(shown.get(id)) : missing)));
+    const shape = el("path", { d, fill: lit ? `var(--m${bucketOf(shown.get(id), edges) + 1})` : "var(--m0)" });
+    shape.appendChild(el("title", {}, named[0] + ": " + (lit ? spec.full(shown.get(id)) : missing)));
 
     // Bez tabindex: 263 zón by znamenalo 263 zastávek tabulátoru mezi grafy. Táž čísla
     // jsou v tabulkách níž, mapa je jejich obrázek.
@@ -483,7 +495,7 @@ function drawMap(host, m) {
             `<span class="r">${cell("speed_mph")} · ${cell("fare_per_mile")}</span>`,
             `<span class="r">pokrytí ${orDash(div(a.dist_obs, a.trips), pct)} vzdálenost`
               + ` · ${orDash(div(a.dur_obs, a.trips), pct)} doba jízdy</span>`,
-          ].concat(known ? [] : [`<span class="r">${missing}</span>`]).join("<br>")
+          ].concat(lit ? [] : [`<span class="r">${missing}</span>`]).join("<br>")
         : `<b>${named[0]}</b> · ${named[1]}<br><span class="r">v datech žádné jízdy</span>`;
       placeTip(tip, host, event.clientX - box.left, event.clientY - box.top - 104);
     });
@@ -738,9 +750,10 @@ function renderMap(m) {
   document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu · " + lowerLabel(m);
   document.getElementById("map-cap").textContent = spec.additive
     ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najeďte na zónu a uvidíte celý její profil za tenhle měsíc, ne jen obarvenou metriku."
-    : "Barva je pořadí: šest pásem, v každém stejný počet zón. Šedé zóny mají za tenhle měsíc míň měření, než"
-      + " kolik žádá posuvník — pásma se počítají bez nich, ať hranice barev neurčuje šum."
-      + " Žebříček zón níž má práh pevný a vyšší: pořadí vybírá extrémy, a ty malá zóna vyhraje snadno.";
+    : "Barva je pořadí: šest pásem, v každém stejný počet spočítatelných zón. Šedé mají za tenhle měsíc míň"
+      + " měření, než žádá posuvník — pásma na posuvníku nezávisí, takže tažení mapu nepřebarvuje, jen posílá"
+      + " zóny do šedé a zpátky. Žebříček zón níž má práh pevný a vyšší: pořadí vybírá extrémy, a ty malá"
+      + " zóna vyhraje snadno.";
   drawMap(document.getElementById("zonemap"), m);
 }
 
