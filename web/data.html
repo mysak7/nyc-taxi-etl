@@ -2,14 +2,12 @@
   <p class="eyebrow" id="src"></p>
   <h1>Kam si New York bere žlutý taxík</h1>
   <p class="lead">
-    Každá jízda žlutého medailonového taxíku, kterou město zveřejnilo, přiřazená k zóně,
-    ve které začala, a sečtená po dnech. Vyberte měsíc a metriku — mapa, řady i žebříčky
-    pod tím pak mluví o jednom měsíci a o jedné veličině.
+    Zveřejněné jízdy žlutého medailonového taxíku, přiřazené k zóně nástupu a sečtené po
+    dnech. Vyberte měsíc a metriku; všechno pod tím mluví o nich.
   </p>
   <p class="lead">
-    Žluté taxíky jsou jen část trhu placené přepravy — zhruba osmina toho, co New Yorčané
-    za jízdy utratí, a mimo Manhattan mnohem méně. Čtěte tahle čísla jako žlutý taxík,
-    ne jako celou ulici.
+    Žluté taxíky jsou zhruba osmina trhu placené přepravy a mimo Manhattan mnohem méně —
+    čtěte tahle čísla jako žlutý taxík, ne jako celou ulici.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -44,15 +42,15 @@
   <div class="card">
     <h3 id="history-title"></h3>
     <p class="cap">
-      Jediný graf na stránce, který nesleduje vybraný měsíc — jinak by neměl co ukazovat.
-      Vybraný měsíc je v něm zvýrazněný, kliknutím se přepne.
+      Jediný graf, který nesleduje vybraný měsíc — jinak by neměl co ukazovat. Vybraný
+      měsíc je zvýrazněný, kliknutím se přepne.
     </p>
     <div class="plot" id="history"></div>
   </div>
 
   <div class="card">
     <h3 id="daily-title"></h3>
-    <p class="cap">Podbarvené pruhy jsou víkendy — sobota a neděle se jezdí jinak a pondělní schod je začátek týdne, ne výpadek.</p>
+    <p class="cap">Podbarvené pruhy jsou víkendy — pondělní schod je začátek týdne, ne výpadek.</p>
     <div class="plot" id="daily"></div>
     <details>
       <summary>Zobrazit jako tabulku</summary>
@@ -81,15 +79,15 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>Jak se o těchhle číslech rozhodlo</b> — které řádky byly odmítnuty a proč, proč se
-      průměr a medián zveřejňují spolu a co tenhle výstup pořád ještě neumí.
+      <b>Jak se o číslech rozhodlo</b> — které řádky vypadly a proč, proč průměr stojí
+      vedle mediánu a co výstup neumí.
     </p>
     <a href="method.html">Metodika a kvalita dat ▸</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Jestli jsou data aktuální</b> — kdy město naposledy publikovalo, kdy se tahle
-      stránka naposledy stavěla a co pipeline při každém svém běhu udělala.
+      <b>Jestli jsou data aktuální</b> — kdy město publikovalo, kdy se stránka stavěla a co
+      pipeline udělala.
     </p>
     <a href="pipeline.html">Pipeline a běhy ▸</a>
   </div>
@@ -98,16 +96,13 @@
 <footer>
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
-    Zdroj: záznamy o jízdách newyorské Taxi &amp; Limousine Commission, agregované podle zóny
-    nástupu a dne nástupu. Stránka je statická — celá historie jsou jednotky megabajtů, takže
-    je zapečená v souboru a při čtení se nic nedotahuje. Kdo chce každý řádek, čte místo toho
-    Parquet.
+    Zdroj: záznamy o jízdách newyorské Taxi &amp; Limousine Commission, agregované podle dne
+    a zóny nástupu. Celá historie jsou jednotky megabajtů, takže je stránka statická a nic
+    se za běhu nedotahuje. Kdo chce každý řádek, čte Parquet.
   </p>
   <p class="note">
-    V souboru nejsou hotové průměry, ale součty a jejich jmenovatele. Průměr se počítá až
-    v prohlížeči a pro ten řez, na který se zrovna díváte — proto je průměrná vzdálenost
-    zóny za měsíc přesně tím, čím by byla, kdyby se počítala z jednotlivých jízd, a ne
-    průměrem průměrů.
+    V souboru nejsou hotové průměry, ale součty a jejich jmenovatelé; průměr se počítá až
+    v prohlížeči pro zobrazený řez — proto není průměrem průměrů.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

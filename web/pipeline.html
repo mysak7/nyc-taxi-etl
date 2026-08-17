@@ -2,13 +2,12 @@
   <p class="eyebrow" id="src"></p>
   <h1>Jak čísla vznikají</h1>
   <p class="lead">
-    Provozní strana téhož datasetu: co pipeline v daný den udělá, které řádky odmítla a proti
-    kterým prahům se posuzovala. Každý údaj tady pochází z manifestu, který si pipeline
-    zapsala vedle vlastního výstupu.
+    Provozní strana téhož datasetu: co pipeline v daný den udělala, které řádky odmítla a
+    proti kterým prahům. Každý údaj pochází z manifestu zapsaného vedle výstupu.
   </p>
   <p class="lead">
-    Zelený běh, který tiše nezpracoval nic, je ten poruchový stav, který stojí za odchycení —
-    a proto kontroly níž běží i ve dnech, kdy není co dělat.
+    Zelený běh, který tiše nezpracoval nic, je ten poruchový stav, co stojí za odchycení —
+    proto kontroly běží i ve dnech, kdy není co dělat.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -24,15 +23,15 @@
   </div>
   <p class="note">
     Zdroj publikuje po měsících se zpožděním 26–85 dní a <strong>přepisuje soubory
-    zpětně</strong> — 25. 3. 2026 nahradil prosinec, leden i únor během jednoho
-    devítiminutového okna. Denní běh proto nezpracovává „včerejšek“. Pošle šest HTTP HEAD
-    požadavků, porovná ETagy s tím, co už má uložené, a obvykle neudělá vůbec nic.
+    zpětně</strong> — 25. 3. 2026 nahradil prosinec, leden i únor v jednom devítiminutovém
+    okně. Denní běh proto nezpracovává „včerejšek“: pošle šest HTTP HEAD, porovná ETagy
+    s uloženými a obvykle neudělá nic.
   </p>
 
   <div class="flow">
     <div class="step">
       <span class="n">detect</span>
-      <span class="d">HEAD na každý měsíc v okně zpětného pohledu a porovnání ETagu proti <code>_meta.json</code> uloženému vedle surového souboru.</span>
+      <span class="d">HEAD na každý měsíc v okně zpětného pohledu, ETag proti <code>_meta.json</code> vedle surového souboru.</span>
     </div>
     <div class="arrow" aria-hidden="true">──▶</div>
     <div class="step">
@@ -43,7 +42,7 @@
     <div class="arrow" aria-hidden="true">──▶</div>
     <div class="step">
       <span class="n">check-freshness</span>
-      <span class="d">Má zdroj zveřejněný měsíc, ke kterému nemáme výstup? Běží i ve dnech, kdy není co dělat.</span>
+      <span class="d">Má zdroj měsíc, ke kterému nemáme výstup? Běží i ve dnech, kdy není co dělat.</span>
     </div>
   </div>
 
@@ -55,7 +54,7 @@
     </div>
     <div class="card">
       <h3>Prahy kvality</h3>
-      <p class="cap">Odvozené ze změřené základní linie přes celou historii, ne odhadnuté. Každý běh zapisuje prahy, které pro něj platily.</p>
+      <p class="cap">Odvozené ze základní linie přes celou historii, ne odhadnuté. Každý běh zapisuje prahy, které pro něj platily.</p>
       <dl class="spec" id="spec-dq"></dl>
     </div>
   </div>
@@ -75,7 +74,7 @@
           <tr>
             <td class="mono">PermanentError</td>
             <td class="dim wrap">403/404 — měsíc ještě není zveřejněný</td>
-            <td class="wrap">Spadnout hned. <code>detect</code> takový měsíc mapperu vůbec nepředá</td>
+            <td class="wrap">Spadnout hned. <code>detect</code> takový měsíc mapperu nepředá</td>
           </tr>
           <tr>
             <td class="mono">DataQualityError</td>
@@ -86,10 +85,10 @@
       </table>
     </div>
     <p class="note" style="margin-top:14px">
-      Plošné <code>retries=3</code> by znamenalo, že nezveřejněný měsíc umírá 45 minut a
-      rozbitá data se počítají čtyřikrát. Alerty se pouštějí, až když jsou pokusy vyčerpané,
-      a přeskočené úlohy neposílají nic — jinak si do týdne všichni kanál odfiltrují a
-      minou ten jeden skutečný incident.
+      Plošné <code>retries=3</code> by znamenalo nezveřejněný měsíc umírající 45 minut a
+      rozbitá data počítaná čtyřikrát. Alert jde až po vyčerpání pokusů, přeskočené úlohy
+      neposílají nic — jinak si do týdne všichni kanál odfiltrují a minou ten jeden skutečný
+      incident.
     </p>
   </div>
 </section>
@@ -100,11 +99,10 @@
     <p class="hint">kliknutím na řádek načtete ten měsíc níž</p>
   </div>
   <p class="note">
-    Jeden řádek je jeden manifest <code>_runs/&lt;run_id&gt;.json</code> ležící vedle výstupu.
-    Manifest se zapisuje až po úspěšném zápisu, takže tahle tabulka vypisuje běhy, které
-    doběhly — neúspěšná spuštění žijí v historii Step Functions, ne tady. Partition se
-    přepisují, manifesty přibývají, takže „kolikrát se tenhle měsíc přepočítal a proti kterému
-    zdrojovému ETagu“ je otázka, na kterou odpovíte <code>ls</code>, ne rozborem incidentu.
+    Jeden řádek je jeden manifest <code>_runs/&lt;run_id&gt;.json</code> vedle výstupu. Píše se
+    až po úspěšném zápisu, takže tabulka vypisuje běhy, které doběhly — neúspěšná spuštění
+    žijí v historii Step Functions. Partition se přepisují, manifesty přibývají: „kolikrát se
+    měsíc přepočítal a proti kterému ETagu“ zodpoví <code>ls</code>, ne rozbor incidentu.
   </p>
   <div class="scroll">
     <table class="runs">
@@ -151,7 +149,7 @@
 
   <div class="card">
     <h3>Pravidla kvality</h3>
-    <p class="cap">Kolika řádků se které pravidlo dotklo. Počítá se nezávisle — jeden řádek může porušit několik pravidel naráz, takže součet nedá počet řádků v karanténě výš.</p>
+    <p class="cap">Kolika řádků se které pravidlo dotklo. Počítá se nezávisle — jeden řádek může porušit několik pravidel, takže součet nedá počet řádků v karanténě výš.</p>
     <div class="plot" id="rules"></div>
   </div>
 
@@ -159,13 +157,10 @@
     <h3>Odmítnuté řádky si nesou svůj důvod</h3>
     <p class="cap">Nic se nemaže. Co pravidlo odmítne, přistane v Parquetu odmítnutých vedle výstupu.</p>
     <p class="note">
-      Do karantény jde řádek jen tehdy, když nepatří do zpracovávaného měsíce — jinak
-      řečeno skoro nikdy. Záporná útrata bere celý řádek taky, ale je to storno, ne vada:
-      počítá se zvlášť a jeho peníze se vykazují v <code>refunds_usd</code>. Špatná
-      <em>hodnota</em> se vynuluje a vypadne ze svého vlastního průměru, ale nezahazuje se
-      ani řádek, ani jeho peníze. Proti čemu se to rozhodnutí měřilo a co by zahazování
-      celých řádků stálo, je na <a href="method.html">metodické stránce</a>; co přesně
-      z každého měsíce vypadlo, je rozepsané v <a href="quarantine.html">karanténě</a>.
+      Do karantény jde řádek jen mimo zpracovávaný měsíc — skoro nikdy. Záporná útrata bere
+      celý řádek taky, ale je to storno, ne vada. Proti čemu se to měřilo, je
+      v <a href="method.html">metodice</a>; co z každého měsíce vypadlo,
+      v <a href="quarantine.html">karanténě</a>.
     </p>
   </div>
 </section>
@@ -173,15 +168,15 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>Výstup samotný</b> — 263 zón nástupu na mapě, osm metrik, denní řady po měsících
-      a průměr sedící vedle mediánu, proti kterému se má číst.
+      <b>Výstup samotný</b> — 263 zón na mapě, osm metrik, denní řady po měsících a průměr
+      vedle mediánu, proti kterému se má číst.
     </p>
     <a href="index.html">◂ Data</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Proč jsou pravidla právě taková</b> — proti čemu se každý práh měřil, co by snazší
-      odpověď stála a která omezení si výstup pořád nese.
+      <b>Proč jsou pravidla taková</b> — proti čemu se každý práh měřil, co by snazší
+      odpověď stála a jaká omezení výstup nese.
     </p>
     <a href="method.html">Metodika a kvalita dat ▸</a>
   </div>
@@ -190,9 +185,9 @@
 <footer>
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
-    Postaveno z vrstvy curated na S3 a naservírováno jako statická stránka — celá historie
-    jsou jednotky megabajtů, takže se vejde do prohlížeče a žádný backend nepotřebuje.
-    Neúspěšné běhy manifest nemají; ty by se tahaly z historie Step Functions.
+    Postaveno z vrstvy curated na S3 a naservírováno staticky — celá historie jsou jednotky
+    megabajtů, takže se vejde do prohlížeče a backend není potřeba. Neúspěšné běhy manifest
+    nemají, ty jsou v historii Step Functions.
   </p>
   <p class="hint" id="foot"></p>
 </footer>
