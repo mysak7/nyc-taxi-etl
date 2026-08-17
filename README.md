@@ -4,8 +4,8 @@ Pipeline nad **NYC Yellow Taxi Trip Records**: stáhne měsíční soubor, zvali
 připojí číselník zón a uloží denní agregaci po zónách jako Parquet. Polars, jeden
 kontejner, Airflow DAG pro denní provoz.
 
-Celý leden 2025 (3 475 226 jízd, 56 MB) zpracuje za **4,9 s**, výstup má 7 290 řádků
-a 232 kB.
+Celý leden 2025 (3 475 226 jízd, 56 MB) zpracuje za **3,5 s** včetně stažení zdroje,
+1,4 s z uloženého raw. Výstup má 7 290 řádků a 236 kB.
 
 > Poznámka ke zadání: jako vstupní dataset je uvedena *Taxi Zone Lookup Table*, ale
 > požadovaný výstup (počty jízd, tržby) a parametrizace `--year/--month` z 265řádkového
@@ -21,7 +21,7 @@ uv run python -m app detect                  # co se na zdroji změnilo (JSON na
 uv run python -m app check-freshness         # nemá zdroj data, která nemáme?
 ```
 
-Testy (30 testů, 3 s; Airflow jen pro import test DAGu):
+Testy (37 testů, 3 s; Airflow jen pro import test DAGu):
 
 ```bash
 uv run pytest -q
@@ -145,9 +145,12 @@ doba pod minutu a podíl nic neznamená.
 
 Práh ±40 % vychází z 29 změřených měsíců: největší skutečný skok byl +21,9 % (2024-09),
 největší pokles −13,5 % (2026-01). Vyřazené řádky nejdou do koše, ale do
-`rejects/…/rejects.parquet` **s důvodem** — v regulovaném prostředí musí jít říct *které*
-řádky vypadly. Počty pravidel se v reportu počítají **nezávisle** (řádek může porušit víc
-pravidel), takže čísla nezávisí na pořadí.
+`rejects/…/rejects.parquet` **s důvodem a s původními hodnotami** — nulování se aplikuje
+až za oddělením karantény, protože řádek vypadl kvůli nějakému číslu a bez toho čísla
+nejde říct proč (v lednu 2025 by jinak 62 716 z 63 059 řádků leželo v rejects bez
+`fare_amount`). V regulovaném prostředí musí jít říct *které* řádky vypadly a proč. Počty
+pravidel se v reportu počítají **nezávisle** (řádek může porušit víc pravidel), takže
+čísla nezávisí na pořadí.
 
 Vedle výstupu leží append-only manifest `_runs/<run_id>.json`: ETag a `sha256` zdroje,
 počty řádků, která pravidla se spustila, prahy, které tehdy platily, a viděné schéma.
@@ -201,7 +204,7 @@ DAG [`dags/nyc_taxi_etl.py`](dags/nyc_taxi_etl.py) (Airflow 3.x): `detect_change
 
 ## Nasazení
 
-Běží na AWS ([`infra/`](infra), ~450 řádků Terraformu). **Týž image jako lokálně** jako
+Běží na AWS ([`infra/`](infra), ~900 řádků Terraformu). **Týž image jako lokálně** jako
 Lambda container image, orchestrace ve Step Functions, spouštění EventBridge Schedulerem.
 Naměřeno na deployi: **15,3 mil. řádků ve 4 měsících za 22 s** wall-clock (souběh 2),
 prázdný běh 3,4 s.
@@ -294,7 +297,7 @@ mapped tasky. Spark by na tomhle objemu byl dekorace, která zdraží provoz i o
 ```
 src/app/     __main__.py (CLI) · pipeline.py (orchestrace) · transform.py (čistá logika)
              dq.py (pravidla) · source.py (HTTP) · storage.py (URI I/O) · config.py
-             errors.py · log.py · lambda_handler.py
+             months.py (měsíční aritmetika) · errors.py · log.py · lambda_handler.py
 tests/       fixture s ručně spočítanými čísly · kontrakt na dvou verzích schématu
              idempotence zápisu · detekce práce bez sítě · DagBag import test
              s3 větev storage proti fake klientovi (jinak se poprvé spustí až na Lambdě)

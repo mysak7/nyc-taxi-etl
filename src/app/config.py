@@ -4,14 +4,17 @@ import os
 import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
+from typing import get_type_hints
 
 DEFAULTS = Path(__file__).with_name("config.toml")
-
-_CAST = {"int": int, "float": float, "str": str}
 
 
 @dataclass(frozen=True)
 class Config:
+    """Každé pole je schválně jen `str`/`int`/`float`: hodnota z TOML i z env se pak
+    převede tím, že se zavolá typ pole. `Optional` nebo vnořená struktura by tuhle
+    jednu řádku rozbila -- konfigurace je plochá záměrně."""
+
     url_template: str
     zones_url: str
     raw_uri: str
@@ -31,7 +34,7 @@ class Config:
     @classmethod
     def load(cls, path: str | Path | None = None, **overrides) -> Config:
         data = tomllib.loads(Path(path or DEFAULTS).read_text())
-        types = {f.name: f.type for f in fields(cls)}
+        types = get_type_hints(cls)  # rozbalí stringové anotace z `from __future__`
         for name in types:
             env = os.environ.get(f"APP_{name.upper()}")
             if env is not None:
@@ -40,7 +43,7 @@ class Config:
         unknown = set(data) - set(types)
         if unknown:
             raise ValueError(f"neznámé položky konfigurace: {sorted(unknown)}")
-        return cls(**{k: _CAST[types[k]](v) for k, v in data.items()})
+        return cls(**{name: types[name](value) for name, value in data.items()})
 
     def thresholds(self) -> dict[str, float]:
         """Prahy, které při běhu platily -- jdou do manifestu, jinak staré manifesty

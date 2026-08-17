@@ -9,12 +9,20 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from functools import lru_cache
 
 import httpx
 
 from .errors import PermanentError, TransientError
 
 TIMEOUT = httpx.Timeout(30.0, read=300.0)
+
+
+@lru_cache(maxsize=1)
+def _client() -> httpx.Client:
+    """Jeden klient na proces. `detect` udělá šest HEADů a nový klient by pro každý znovu
+    navazoval TLS; Lambda ho navíc udrží mezi invokacemi, což je žádoucí."""
+    return httpx.Client(timeout=TIMEOUT, follow_redirects=True)
 
 
 @dataclass(frozen=True)
@@ -55,8 +63,7 @@ def download(url: str) -> tuple[bytes, SourceMeta, str]:
 
 def _request(method: str, url: str) -> httpx.Response | None:
     try:
-        with httpx.Client(timeout=TIMEOUT, follow_redirects=True) as client:
-            response = client.request(method, url)
+        response = _client().request(method, url)
     except httpx.HTTPError as exc:  # timeout, reset, DNS -- opakování má smysl
         raise TransientError(f"{method} {url}: {exc}") from exc
 

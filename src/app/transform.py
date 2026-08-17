@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from .dq import NO_ROW_ACTIONS, REVERSAL, ROW_ACTIONS, Rule
+from .dq import REVERSAL, ROW_ACTIONS, Rule
 
 NEEDED = [
     "tpep_pickup_datetime",
@@ -55,65 +55,55 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
         pl.col("tpep_dropoff_datetime") - pl.col("tpep_pickup_datetime")
     ).dt.total_seconds() / 60
 
-    flagged = (
+    nulled_by: dict[str, list[str]] = {}
+    for rule in (r for r in rules if r.nullifies):
+        nulled_by.setdefault(rule.action, []).append(f"v_{rule.name}")
+
+    frame = (
         trips.select(NEEDED)
         .with_columns(duration_min=duration)
         .with_columns([rule.expr.alias(f"v_{rule.name}") for rule in rules])
+        .with_columns(reject_reason=_label(rules))
+        .collect()  # jediný collect
     )
 
-    # Řádek může porušit víc pravidel; štítek dostane první podle pořadí v `rules`.
-    # Karanténa i storno berou celý řádek, takže soutěží o tentýž štítek -- a pořadí
-    # rozhoduje správně: storno jízdy z prosince je `out_of_month`, do refunds tohohle
-    # měsíce nepatří o nic víc než ta jízda sama.
-    reason = pl.lit(None, dtype=pl.String)
-    for rule in reversed([r for r in rules if r.action in ROW_ACTIONS]):
-        reason = pl.when(pl.col(f"v_{rule.name}")).then(pl.lit(rule.name)).otherwise(reason)
-    flagged = flagged.with_columns(reject_reason=reason)
+    is_published = pl.col("reject_reason").is_null()
+    is_reversal = pl.col("reject_reason").is_in([r.name for r in rules if r.action == REVERSAL])
 
-    nulled_by: dict[str, list[str]] = {}
-    for rule in (r for r in rules if r.action not in NO_ROW_ACTIONS):
-        nulled_by.setdefault(rule.action, []).append(f"v_{rule.name}")
-    flagged = flagged.with_columns(
+    # Karanténa i storna jdou do rejects s *původními* hodnotami: řádek vypadl kvůli
+    # nějakému číslu a bez toho čísla nejde říct proč. Nulování se proto aplikuje až
+    # tady, jen na řádky, ze kterých se počítá výstup.
+    excluded = frame.filter(~is_published)
+    kept = frame.filter(is_published | is_reversal).with_columns(
         [
             pl.when(pl.any_horizontal(flags)).then(None).otherwise(pl.col(column)).alias(column)
             for column, flags in nulled_by.items()
         ]
     )
 
-    frame = flagged.collect()  # jediný collect
-
-    reversal_rules = [r.name for r in rules if r.action == REVERSAL]
-    published = frame.filter(pl.col("reject_reason").is_null())
-    excluded = frame.filter(pl.col("reject_reason").is_not_null())
-    reversals = excluded.filter(pl.col("reject_reason").is_in(reversal_rules))
-    rejects = excluded.filter(~pl.col("reject_reason").is_in(reversal_rules))
-
-    aggregate = _aggregate(published).join(
-        _refunds(reversals), on=["date", "location_id"], how="full", coalesce=True
-    )
-    aggregate = aggregate.with_columns(
-        pl.col("trips", "distance_obs", "duration_obs", "fare_obs").fill_null(0),
-        pl.col("yellow_revenue_usd", "refunds_usd").fill_null(0.0),
-    )
-    # Hrubá tržba přeceňuje: storna jsou 1,8 % objemu a v datech nezmizí, jen leží
-    # vedle. Čistá tržba je jejich součet -- rozklad zůstává v obou sloupcích.
-    aggregate = aggregate.with_columns(
-        net_revenue_usd=(pl.col("yellow_revenue_usd") + pl.col("refunds_usd")).round(2)
-    )
     aggregate = (
-        aggregate.join(_zones(zones), on="location_id", how="left", validate="m:1")
+        _aggregate(kept, is_published, is_reversal)
+        # Ze zaokrouhlených sloupců, ne z hrubého součtu: kdo si ve výstupu ověří
+        # `yellow_revenue_usd + refunds_usd == net_revenue_usd`, musí dostat rovnost.
+        .with_columns(
+            net_revenue_usd=(pl.col("yellow_revenue_usd") + pl.col("refunds_usd")).round(2)
+        )
+        .join(_zones(zones), on="location_id", how="left", validate="m:1")
         .select(OUTPUT_COLUMNS)
         .sort("date", "location_id")
     )
 
+    reversed_rows = int(excluded.select(is_reversal.sum()).item())
     metrics = {
         "rows": {
             "input": frame.height,
-            "published": published.height,
-            "reversed": reversals.height,
-            "rejected": rejects.height,
+            "published": frame.height - excluded.height,
+            "reversed": reversed_rows,
+            "rejected": excluded.height - reversed_rows,
             "output": aggregate.height,
         },
+        # Nezávisle na štítku: řádek může porušit víc pravidel a každé se přizná ke svému
+        # počtu, takže čísla v manifestu nezávisí na pořadí v `rules`.
         "rules": {r.name: int(frame[f"v_{r.name}"].sum()) for r in rules},
         "nulled": {
             column: int(frame.select(pl.any_horizontal(flags).sum()).item())
@@ -125,33 +115,47 @@ def transform(trips: pl.LazyFrame, zones: pl.LazyFrame, rules: list[Rule]) -> Re
     )
 
 
-def _aggregate(published: pl.DataFrame) -> pl.DataFrame:
-    """Každý průměr nese svůj jmenovatel: globálně je jmenovatel vzdálenosti 97 %, ale
-    u Newark Airportu 21 % -- jedno číslo za měsíc by to nepopsalo."""
-    return published.group_by(
-        pl.col("tpep_pickup_datetime").dt.date().alias("date"),
-        pl.col("PULocationID").cast(pl.Int32).alias("location_id"),
-    ).agg(
-        trips=pl.len(),
-        avg_distance_mi=pl.col("trip_distance").mean().round(3),
-        median_distance_mi=pl.col("trip_distance").median().round(3),
-        distance_obs=pl.col("trip_distance").count(),
-        avg_duration_min=pl.col("duration_min").mean().round(2),
-        median_duration_min=pl.col("duration_min").median().round(2),
-        duration_obs=pl.col("duration_min").count(),
-        avg_fare_usd=pl.col("fare_amount").mean().round(2),
-        fare_obs=pl.col("fare_amount").count(),
-        yellow_revenue_usd=pl.col("total_amount").sum().round(2),
+def _label(rules: list[Rule]) -> pl.Expr:
+    """Řádek může porušit víc pravidel; štítek dostane první podle pořadí v `rules`.
+    Karanténa i storno berou celý řádek, takže soutěží o tentýž štítek -- a pořadí
+    rozhoduje správně: storno jízdy z prosince je `out_of_month`, do refunds tohohle
+    měsíce nepatří o nic víc než ta jízda sama."""
+    return pl.coalesce(
+        [
+            pl.when(pl.col(f"v_{rule.name}")).then(pl.lit(rule.name))
+            for rule in rules
+            if rule.action in ROW_ACTIONS
+        ]
     )
 
 
-def _refunds(reversals: pl.DataFrame) -> pl.DataFrame:
-    """Objem storn na den a zónu. Hrubá tržba zůstává hrubá, rozklad je v obou
-    sloupcích -- kdo chce vykazované číslo, bere net_revenue_usd."""
-    return reversals.group_by(
+def _aggregate(kept: pl.DataFrame, published: pl.Expr, reversal: pl.Expr) -> pl.DataFrame:
+    """Jízdy a storna se agregují jedním průchodem: jsou to řádky téhož dne a téže zóny,
+    jen se počítají do jiných sloupců. Dřív to byly dva `group_by` spojené full outer
+    joinem a `fill_null` -- ta samá věta, jen delší.
+
+    Každý průměr nese svůj jmenovatel: globálně je jmenovatel vzdálenosti 97 %, ale
+    u Newark Airportu 21 % -- jedno číslo za měsíc by to nepopsalo. Zóna, kde v ten den
+    bylo *jen* storno, tak vyjde s `trips = 0` a průměry `null`; peníze má.
+    """
+    return kept.group_by(
         pl.col("tpep_pickup_datetime").dt.date().alias("date"),
         pl.col("PULocationID").cast(pl.Int32).alias("location_id"),
-    ).agg(refunds_usd=pl.col("total_amount").sum().round(2))
+    ).agg(
+        trips=published.sum(),
+        # `filter(published)` u každé metriky: storno není jízda, takže do žádného
+        # průměru ani jmenovatele nepatří. Bere se od něj jedině `refunds_usd`.
+        avg_distance_mi=pl.col("trip_distance").filter(published).mean().round(3),
+        median_distance_mi=pl.col("trip_distance").filter(published).median().round(3),
+        distance_obs=pl.col("trip_distance").filter(published).count(),
+        avg_duration_min=pl.col("duration_min").filter(published).mean().round(2),
+        median_duration_min=pl.col("duration_min").filter(published).median().round(2),
+        duration_obs=pl.col("duration_min").filter(published).count(),
+        avg_fare_usd=pl.col("fare_amount").filter(published).mean().round(2),
+        fare_obs=pl.col("fare_amount").filter(published).count(),
+        yellow_revenue_usd=pl.col("total_amount").filter(published).sum().round(2),
+        refunds_usd=pl.col("total_amount").filter(reversal).sum().round(2),
+    )
 
 
 def _zones(zones: pl.LazyFrame) -> pl.DataFrame:

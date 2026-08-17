@@ -13,6 +13,7 @@ import polars as pl
 
 from .config import Config
 from .errors import DataQualityError
+from .months import next_month
 
 # Sloupce, bez kterých výstup nevznikne. Kontrakt je "existuje a je toho druhu",
 # ne "schéma se přesně rovná" -- TLC sloupce přidává (cbd_congestion_fee od 2025-01).
@@ -60,8 +61,8 @@ BASELINE_COLUMNS = frozenset(
 REJECT = "reject"
 REVERSAL = "reversal"
 OBSERVE = "observe"  # jen se spočítá do manifestu, na řádek nesahá
-ROW_ACTIONS = frozenset({REJECT, REVERSAL})
-NO_ROW_ACTIONS = ROW_ACTIONS | {OBSERVE}
+ROW_ACTIONS = frozenset({REJECT, REVERSAL})  # berou celý řádek z výstupu
+SENTINELS = ROW_ACTIONS | {OBSERVE}  # cokoli jiného v `action` je jméno sloupce
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,11 @@ class Rule:
     name: str
     expr: pl.Expr  # True = porušeno
     action: str  # REJECT / REVERSAL / OBSERVE, nebo jméno sloupce, který se vynuluje
+
+    @property
+    def nullifies(self) -> bool:
+        """Akce není sentinel -> je to jméno sloupce, který se u vadného řádku vynuluje."""
+        return self.action not in SENTINELS
 
 
 def check_contract(schema: dict[str, pl.DataType]) -> dict:
@@ -100,7 +106,7 @@ def rules(cfg: Config, year: int, month: int) -> list[Rule]:
     """Pořadí = od nejvzácnějšího pravidla k nejčastějšímu (naměřeno na 2025-01), aby
     vzácnou patologii v `reject_reason` nespolklo objemové pravidlo."""
     start = pl.datetime(year, month, 1)
-    end = pl.datetime(year + month // 12, month % 12 + 1, 1)
+    end = pl.datetime(*next_month(year, month), 1)
     pickup = pl.col("tpep_pickup_datetime")
     return [
         # Není kvalita, ale partitioning: lednový soubor obsahuje 22 jízd z prosince

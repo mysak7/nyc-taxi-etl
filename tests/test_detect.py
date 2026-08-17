@@ -7,7 +7,7 @@ from datetime import date
 import polars as pl
 import pytest
 
-from app import pipeline, source, storage
+from app import months, pipeline, source, storage
 from app.errors import DataQualityError
 
 
@@ -103,6 +103,14 @@ def test_backfill_rozsah_se_rozbali_na_mesice():
         (2025, 2),
     ]
     assert pipeline.month_range(None, None) is None
+
+
+def test_mesicni_aritmetika_drzi_na_prelomu_roku(cfg):
+    """Jediné místo, kde se počítá „o měsíc dál" -- dřív to byly tři různé triky
+    s `timedelta` na čtyřech místech a přelom roku každý řešil jinak."""
+    assert months.next_month(2025, 12) == (2026, 1)
+    assert months.previous_month(2025, 1) == (2024, 12)
+    assert pipeline.window(cfg, today=date(2025, 1, 15))[:2] == [(2024, 12), (2024, 11)]
 
 
 def test_zeleny_dag_nelze_kdyz_zdroj_ma_data_ktera_nemame(cfg, published):

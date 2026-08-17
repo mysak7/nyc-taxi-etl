@@ -96,6 +96,17 @@ def test_stitek_vyrazeneho_radku_je_nejvzacnejsi_pravidlo(cfg, trips, zones):
     assert reasons == ["out_of_month", "reversal"]
 
 
+def test_vyrazeny_radek_si_nese_hodnotu_kvuli_ktere_vypadl(cfg, trips, zones):
+    """Nulování se aplikuje až za oddělením karantény. Kdyby bylo dřív, storno se
+    záporným jízdným by v rejects leželo s `fare_amount = null` -- tedy bez toho čísla,
+    kvůli kterému tam je. Na reálném lednu 2025 to bylo 62 716 z 63 059 řádků."""
+    excluded = result(cfg, trips, zones).excluded
+
+    assert excluded.null_count().sum_horizontal().item() == 0
+    storno = excluded.filter(reject_reason="reversal").to_dicts()[0]
+    assert (storno["fare_amount"], storno["total_amount"]) == (-5.0, -5.0)
+
+
 def test_dimenze_se_dojoinovala_vcetne_neznamych_zon(cfg, trips, zones):
     aggregate = result(cfg, trips, zones).aggregate
 

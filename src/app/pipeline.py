@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import secrets
 import time
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 
 import polars as pl
 
@@ -18,6 +18,7 @@ from . import dq, source, storage
 from .config import Config
 from .errors import DataQualityError, PermanentError
 from .log import bind, log
+from .months import label, next_month, parse, previous_month
 from .transform import transform
 
 VERSION = "0.1.0"
@@ -35,11 +36,12 @@ def layout(cfg: Config) -> storage.Layout:
 def window(cfg: Config, today: date | None = None) -> list[tuple[int, int]]:
     """Okno končí u předchozího měsíce -- aktuální měsíc zdroj publikovat nemůže.
     Šest měsíců pokryje naměřený lag (26-85 dní) i dávkový restatement."""
-    cursor = (today or date.today()).replace(day=1) - timedelta(days=1)
+    today = today or date.today()
+    cursor = previous_month(today.year, today.month)
     months = []
     for _ in range(cfg.lookback_months):
-        months.append((cursor.year, cursor.month))
-        cursor = cursor.replace(day=1) - timedelta(days=1)
+        months.append(cursor)
+        cursor = previous_month(*cursor)
     return months
 
 
@@ -47,34 +49,30 @@ def month_range(from_month: str | None, to_month: str | None) -> list[tuple[int,
     """Backfill je explicitní rozsah, ne druhý DAG a ne druhá cesta kódem."""
     if not from_month and not to_month:
         return None
-    start = _parse_month(from_month or to_month)
-    end = _parse_month(to_month or from_month)
-    months, cursor = [], start
-    while cursor <= end:
-        months.append((cursor.year, cursor.month))
-        cursor = (cursor.replace(day=28) + timedelta(days=7)).replace(day=1)
+    cursor, end = parse(from_month or to_month), parse(to_month or from_month)
+    months = []
+    while cursor <= end:  # měsíc je pár (year, month), takže se porovnává přímo
+        months.append(cursor)
+        cursor = next_month(*cursor)
     return months
-
-
-def _parse_month(value: str) -> date:
-    year, month = value.split("-")
-    return date(int(year), int(month), 1)
 
 
 def detect(cfg: Config, months: list[tuple[int, int]] | None = None, force: bool = False) -> dict:
     paths = layout(cfg)
     candidates = months or window(cfg)
-    work, published = [], []
+    work, published, gaps = [], [], []
 
     for year, month in candidates:
         meta = source.head(cfg.month_url(year, month))
         if meta is None:
             log("month_not_published", year=year, month=month)
             continue
-        published.append((year, month, meta))
+        published.append((year, month))
 
         stored = _stored_meta(paths, year, month)
-        has_output = storage.exists(paths.curated_file(year, month))
+        has_output = storage.exists(paths.curated_file(year, month))  # na S3 HEAD, ne dvakrát
+        if not has_output:
+            gaps.append(label(year, month))
         if force:
             reason = "force"
         elif stored is None:
@@ -88,16 +86,12 @@ def detect(cfg: Config, months: list[tuple[int, int]] | None = None, force: bool
             continue
         work.append({"year": year, "month": month, "etag": meta.etag, "reason": reason})
 
-    newest = max(published, key=lambda item: (item[0], item[1])) if published else None
+    newest = max(published) if published else None  # páry se řadí chronologicky
     return {
         "months": work,
-        "source_newest": f"{newest[0]:04d}-{newest[1]:02d}" if newest else None,
-        "source_age_days": _age_days(newest[0], newest[1]) if newest else None,
-        "ingest_gap": [
-            f"{year:04d}-{month:02d}"
-            for year, month, _ in published
-            if not storage.exists(paths.curated_file(year, month))
-        ],
+        "source_newest": label(*newest) if newest else None,
+        "source_age_days": _age_days(*newest) if newest else None,
+        "ingest_gap": gaps,
     }
 
 
@@ -141,9 +135,13 @@ def run_month(
     rules = dq.rules(cfg, year, month)
     result = transform(trips, zones, rules)
 
-    previous = _previous_input_rows(paths, year, month)
-    result.metrics["rows"]["prev_version_input"] = _latest_input_rows(paths, year, month)
-    dq.gate(result.metrics, cfg, previous)
+    # `prev_version_input` = předchozí verze *téhož* měsíce (jen se vykazuje),
+    # `previous` = předchozí měsíc (na ten je práh objemu).
+    metrics = result.metrics | {
+        "rows": result.metrics["rows"]
+        | {"prev_version_input": _latest_input_rows(paths, year, month)}
+    }
+    dq.gate(metrics, cfg, _previous_input_rows(paths, year, month))
 
     storage.write_parquet(paths.curated_file(year, month), result.aggregate)
     storage.write_parquet(paths.rejects_file(year, month), result.excluded)
@@ -152,7 +150,7 @@ def run_month(
         "run_id": run_id,
         "trigger": trigger,
         "app_version": VERSION,
-        "git_sha": _git_sha(),
+        "git_sha": os.environ.get("GIT_SHA"),  # ARG GIT_SHA v Dockerfile
         "dataset": "yellow",
         "year": year,
         "month": month,
@@ -164,7 +162,7 @@ def run_month(
             "sha256": sha256,
         },
         "schema": schema,
-        **result.metrics,
+        **metrics,
         "thresholds_applied": cfg.thresholds(),
         "timing": {"seconds": round(time.monotonic() - started, 1)},
     }
@@ -231,17 +229,12 @@ def _latest_input_rows(paths: storage.Layout, year: int, month: int) -> int | No
 
 
 def _previous_input_rows(paths: storage.Layout, year: int, month: int) -> int | None:
-    previous = date(year, month, 1) - timedelta(days=1)
-    rows = _latest_input_rows(paths, previous.year, previous.month)
+    rows = _latest_input_rows(paths, *previous_month(year, month))
     if rows is None:
         log("volume_check_skipped", reason="předchozí měsíc není zpracovaný")
     return rows
 
 
 def _age_days(year: int, month: int) -> int:
-    end = date(year + month // 12, month % 12 + 1, 1)
-    return (date.today() - end).days
-
-
-def _git_sha() -> str | None:
-    return os.environ.get("GIT_SHA")
+    """Stáří měsíce = kolik dní uplynulo od jeho konce."""
+    return (date.today() - date(*next_month(year, month), 1)).days
