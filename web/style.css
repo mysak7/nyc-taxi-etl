@@ -486,8 +486,11 @@ select {
   font-weight: 600;
 }
 
-/* Rampa se čte zleva doprava jako jedna škála, popisky sedí na hranách mezi poli. */
-.scale { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 24px; margin: 0 0 14px; }
+/* Rampa se čte zleva doprava jako jedna škála, popisky sedí na hranách mezi poli.
+   Posuvník stojí pod rampou, ne vedle ní: popisek u šedého vzorku nese práh, takže při
+   tažení mění délku. V jedné řadě by tím posouval sám posuvník i mapu pod ním -- čtenář
+   by táhl za něco, co mu pod rukou utíká. Ve sloupci se šířka rampy nikam nepromítá. */
+.scale { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 0 0 14px; }
 .ramp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
 .ramp .steps { display: flex; }
 .ramp .steps i { width: 46px; height: 10px; }
@@ -500,7 +503,7 @@ select {
 .ramp .edges span { width: 46px; text-align: left; white-space: nowrap; }
 .ramp .nodata { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); }
 
-/* Práh šedé si nastavuje čtenář, tak ať je ten posuvník vedle šedého vzorku, který
+/* Práh šedé si nastavuje čtenář, tak ať ten posuvník stojí hned pod pásmy, která
    ovládá, a ať vedle sebe pořád stojí číslo, co zrovna platí. */
 .thresh { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
 .thresh input[type="range"] { width: 132px; accent-color: var(--mk); }
