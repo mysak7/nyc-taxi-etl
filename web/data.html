@@ -34,7 +34,18 @@
   <div class="card">
     <h3 id="map-title"></h3>
     <p class="cap" id="map-cap"></p>
-    <div class="ramp" id="map-legend"></div>
+    <div class="scale">
+      <div class="ramp" id="map-legend"></div>
+      <!-- "Kolik měření je dost na průměr" není fakt o datech, ale rozhodnutí čtenáře.
+           Posuvník žije mimo `#map-legend`, protože ten se při každém překreslení
+           přepisuje celý -- tažení by pod rukou zmizelo. -->
+      <div class="thresh" id="map-thresh" hidden>
+        <label for="thresh">Šedá pod</label>
+        <input type="range" id="thresh" min="0" max="10" step="0.25" value="1"
+               aria-label="Práh zobrazení zóny v procentech průměrné zóny">
+        <output class="out" id="thresh-out" for="thresh"></output>
+      </div>
+    </div>
     <div class="plot map" id="zonemap"></div>
     <p class="hint" id="map-foot"></p>
   </div>

@@ -487,7 +487,8 @@ select {
 }
 
 /* Rampa se čte zleva doprava jako jedna škála, popisky sedí na hranách mezi poli. */
-.ramp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+.scale { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 24px; margin: 0 0 14px; }
+.ramp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
 .ramp .steps { display: flex; }
 .ramp .steps i { width: 46px; height: 10px; }
 .ramp .steps i:first-child { border-radius: 2px 0 0 2px; }
@@ -498,6 +499,12 @@ select {
 .ramp .edges { display: flex; color: var(--ink-3); margin-top: 4px; }
 .ramp .edges span { width: 46px; text-align: left; white-space: nowrap; }
 .ramp .nodata { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); }
+
+/* Práh šedé si nastavuje čtenář, tak ať je ten posuvník vedle šedého vzorku, který
+   ovládá, a ať vedle sebe pořád stojí číslo, co zrovna platí. */
+.thresh { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.thresh input[type="range"] { width: 132px; accent-color: var(--mk); }
+.thresh .out { color: var(--ink-2); white-space: nowrap; }
 
 .tip {
   position: absolute;

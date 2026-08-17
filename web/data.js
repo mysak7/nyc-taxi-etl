@@ -161,21 +161,43 @@ const SPEC = () => METRICS[metric];
 
    Mapa se ptá "má tenhle průměr vůbec smysl ukázat". To je vlastnost té jedné zóny:
    stabilita průměru stojí na počtu měření v ní, ne na tom, kolik se v ten měsíc jezdilo
-   ve zbytku města. Proto absolutní počet. Relativní práh (0,1 % jízd měsíce) tady dělal
-   ze čtyř pětin města šedou plochu: v lednu 2025 to je ≥ 3 412 měření a projde jich
-   59 z 259 zón, i když těch 200 zbylých má hodnoty a dohromady necelá čtyři procenta
-   jízd. Mapa pak netvrdila "nevíme", ale "tady nic není" -- a to je jiné tvrzení.
+   ve zbytku města. Měřítkem je proto průměrná kreslená zóna měsíce -- v lednu 2025 asi
+   13 tisíc jízd -- a práh je její procento. Původní práh 0,1 % jízd celého města je
+   v téhle jednotce 26 % průměrné zóny a dělal ze čtyř pětin mapy šedou plochu: obarvil
+   59 z 259 zón, i když těch 200 zbylých hodnoty má. Mapa pak netvrdila "nevíme", ale
+   "tady nic není" -- a to je jiné tvrzení.
+
+   Kde přesně je hranice, ale není fakt o datech. Je to rozhodnutí, kolik šumu čtenář
+   snese, tak ho drží posuvník: výchozí 1 % průměrné zóny (asi 130 měření, obarví ~215
+   zón), nula ukáže všechno, co se vůbec dalo spočítat, a 10 % nechá jen zóny s provozem.
+   Hodnota se čte vedle posuvníku v obou jednotkách, aby se vědělo, co je zrovna zapnuté.
 
    Žebříček se ptá "která zóna je v tom nejvyšší", a to je jiná otázka: pořadí vybírá
    extrémy, takže do prvních deseti se přes malý práh dostane zóna se 165 měřeními
-   a 23 mph -- žádné letiště, jen málo dat. Tam relativní práh zůstává.
+   a 23 mph -- žádné letiště, jen málo dat. Tam relativní práh zůstává pevný a přísný;
+   posuvník na mapě ho nehýbe, protože žebříček není o tom, co se dá ukázat.
 
-   Oba se měří na jmenovateli té konkrétní metriky, ne na počtu jízd -- zóna může mít
-   jízd dost a měření vzdálenosti skoro žádné. Součty práh nemají ani jeden: sto jízd
-   je sto jízd, na tom není co odhadovat. */
-const SHOW_MIN = 100;
+   Všechny se měří na jmenovateli té konkrétní metriky, ne na počtu jízd -- zóna může mít
+   jízd dost a měření vzdálenosti skoro žádné. Součty práh nemají žádný: sto jízd je sto
+   jízd, na tom není co odhadovat. */
 const RANK_SHARE = 0.001;
 const rankFloor = (m) => Math.round(monthAgg(m).trips * RANK_SHARE);
+
+// Průměr se počítá jen ze zón, které mapa kreslí: zbytkové kódy bez obrysu (264/265) do
+// "průměrné zóny mapy" nepatří, jinak by práh hýbal něco, co není vidět.
+const DRAWN = Object.keys(MAP.paths);
+const zoneMean = (m) => memo("mean:" + m.key, () => {
+  const aggs = zoneAggs(m);
+  const sum = DRAWN.reduce((s, id) => s + (ZIDX.has(id) ? aggs[ZIDX.get(id)].trips : 0), 0);
+  return sum / DRAWN.length;
+});
+
+let showShare = 0.01;
+const showFloor = (m) => Math.round(zoneMean(m) * showShare);
+// Krok posuvníku je čtvrt procenta, takže vlastní formát: `pct` má jedno desetinné místo
+// a udělalo by z "0,25 %" a "0,3 %" totéž číslo. Celá procenta zůstávají bez desetin.
+const nfShare = new Intl.NumberFormat("cs-CZ", { maximumFractionDigits: 2 });
+const shareLabel = (s) => nfShare.format(s * 100) + " %";
 const solid = (a, floor) => {
   if (SPEC().additive) return a.trips > 0;
   const v = SPEC().value(a);
@@ -384,8 +406,9 @@ const bucketOf = (v, edges) => edges.reduce((acc, e) => acc + (v >= e ? 1 : 0), 
 function drawMap(host, m) {
   const spec = SPEC();
   const aggs = zoneAggs(m);
-  const floor = SHOW_MIN;
+  const floor = showFloor(m);
   host.querySelectorAll("svg").forEach((n) => n.remove());
+  syncThresh(m, floor);
 
   // Rampa se mění po skupinách, ne po metrikách: odstín nese "čteš součet / průměr na
   // jízdu / poměr dvou průměrů", což je ta informace, kvůli které se jinak musí číst
@@ -430,7 +453,9 @@ function drawMap(host, m) {
     // nasčítá skoro všude, za jeden měsíc ne.
     const missing = !a || !a.trips
       ? "v tomhle měsíci žádné jízdy"
-      : "málo měření na průměr (" + nf.format(spec.obs(a) || 0) + " z " + nf.format(floor) + ")";
+      : !spec.obs(a)
+        ? "jízdy ano, měření téhle metriky žádné"
+        : "málo měření na průměr (" + nf.format(spec.obs(a)) + " z " + nf.format(floor) + ")";
 
     // Bublina nese celý profil zóny, ne jen obarvenou metriku, a tučně je v něm to, čím
     // je zrovna obarveno. Přepínač tak nemění, co se dá přečíst -- jen kam se dívat.
@@ -474,7 +499,9 @@ function drawMap(host, m) {
 
   const grey = spec.additive
     ? "žádná jízda v tomhle měsíci"
-    : "žádné jízdy nebo míň než " + nf.format(SHOW_MIN) + " měření";
+    : floor > 0
+      ? "žádné jízdy nebo míň než " + nf.format(floor) + " měření"
+      : "nic, co by se dalo změřit";
   document.getElementById("map-legend").innerHTML =
     `<div><div class="steps">${lows.map((_, i) => `<i style="background:var(--m${i + 1})"></i>`).join("")}</div>`
     + `<div class="edges">${lows.map((v) => `<span>${spec.short(v)}</span>`).join("")}</div></div>`
@@ -485,7 +512,8 @@ function drawMap(host, m) {
   document.getElementById("map-foot").textContent =
     (spec.additive
       ? `${shown.size} z ${drawn} zón má ${inLabel(m)} aspoň jednu jízdu`
-      : `${shown.size} z ${drawn} zón má ${inLabel(m)} aspoň ${nf.format(SHOW_MIN)} měření na průměr`)
+      : `${shown.size} z ${drawn} zón má ${inLabel(m)} aspoň ${nf.format(floor)} měření na průměr`
+        + ` (práh ${shareLabel(showShare)} průměrné zóny, ta má ${nf.format(Math.round(zoneMean(m)))} jízd)`)
     + " · " + nf.format(off) + " jízd spadá do " + OFF_MAP.length
     + " kódů, které na žádné mapě obrys nemají (neznámé, mimo NYC)";
 }
@@ -662,6 +690,26 @@ function buildHeader() {
     + " pokrývajících " + SPAN + " · " + plural(IDS.length, "zóna", "zóny", "zón") + " nástupu.";
 }
 
+/* Posuvník prahu. Odpovídá jen za mapu, tak se s ní překresluje jen ona -- 263 cest je
+   levné, ale žebříček ani dlaždice se tím nehýbou a překreslovat je by bylo zavádějící.
+
+   U součtů je práh pojem bez obsahu (nic se nedělí), takže se řádek skryje, a jeho
+   hodnota se drží: přepnutí na jízdy a zpátky nastavení nezruší. */
+function buildThreshold() {
+  const input = document.getElementById("thresh");
+  input.value = String(showShare * 100);
+  input.addEventListener("input", () => {
+    showShare = Number(input.value) / 100;
+    renderMap(month());
+  });
+}
+
+function syncThresh(m, floor) {
+  document.getElementById("map-thresh").hidden = SPEC().additive;
+  document.getElementById("thresh-out").textContent =
+    shareLabel(showShare) + " průměrné zóny · " + (floor > 0 ? "od " + nf.format(floor) + " měření" : "bez prahu");
+}
+
 /* Přepínač metriky: viditelná řada, ne `select`. Osm možností se do řady vejde a je na
    první pohled vidět, že se stránka dá přepnout -- rozbalovátko to netvrdí. Skupiny
    odděluje mezera: součty, průměry na jízdu, poměry mezi průměry. */
@@ -684,6 +732,18 @@ function buildMetricPicker() {
 
 /* ---------- render ---------- */
 
+// Vlastní funkce, protože mapa se překresluje i sama: posuvník prahu hýbe jen jí.
+function renderMap(m) {
+  const spec = SPEC();
+  document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu · " + lowerLabel(m);
+  document.getElementById("map-cap").textContent = spec.additive
+    ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najeďte na zónu a uvidíte celý její profil za tenhle měsíc, ne jen obarvenou metriku."
+    : "Barva je pořadí: šest pásem, v každém stejný počet zón. Šedé zóny mají za tenhle měsíc míň měření, než"
+      + " kolik žádá posuvník — pásma se počítají bez nich, ať hranice barev neurčuje šum."
+      + " Žebříček zón níž má práh pevný a vyšší: pořadí vybírá extrémy, a ty malá zóna vyhraje snadno.";
+  drawMap(document.getElementById("zonemap"), m);
+}
+
 // Překresluje se všechno včetně mapy: měsíc i metrika s ní hýbou a 261 cest je levnější
 // než dvě cesty kódu, které se mají udržet v souladu.
 function render() {
@@ -702,13 +762,7 @@ function render() {
 
   buildTilesFor(m);
 
-  document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu · " + lowerLabel(m);
-  document.getElementById("map-cap").textContent = spec.additive
-    ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najeďte na zónu a uvidíte celý její profil za tenhle měsíc, ne jen obarvenou metriku."
-    : "Barva je pořadí: šest pásem, v každém stejný počet zón. Šedé zóny mají za tenhle měsíc míň než "
-      + nf.format(SHOW_MIN) + " měření — pásma se počítají bez nich, ať hranice barev neurčuje šum."
-      + " Žebříček zón níž má práh vyšší: pořadí vybírá extrémy, a ty malá zóna vyhraje snadno.";
-  drawMap(document.getElementById("zonemap"), m);
+  renderMap(m);
 
   document.getElementById("history-title").textContent = spec.label + " měsíc po měsíci";
   drawHistory(document.getElementById("history"));
@@ -723,5 +777,6 @@ function render() {
 buildHeader();
 buildPicker();
 buildMetricPicker();
+buildThreshold();
 render();
 watchResize();
