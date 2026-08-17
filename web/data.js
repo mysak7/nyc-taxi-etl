@@ -155,15 +155,27 @@ let metric = "trips";
 const SPEC = () => METRICS[metric];
 
 /* Průměr z hrstky jízd není průměr. Zóna se šesti jízdami za měsíc dá "rychlost" 65 mph
-   a v žebříčku i na mapě by přebila celé letiště -- není to nález, je to šum vydávaný
-   za nález.
+   -- není to nález, je to šum vydávaný za nález.
 
-   Práh je proto jeden pro celou stránku: aspoň 0,1 % jízd toho měsíce. Relativní, aby se
-   v kratším měsíci posunul s ním, a měří se na jmenovateli té konkrétní metriky, ne na
-   počtu jízd -- zóna může mít jízd dost a měření vzdálenosti skoro žádné. Součty žádný
-   práh nemají: sto jízd je sto jízd, na tom není co odhadovat. */
-const FLOOR_SHARE = 0.001;
-const floorOf = (m) => Math.round(monthAgg(m).trips * FLOOR_SHARE);
+   Prahy jsou ale dva, protože mapa a žebříček se ptají na dvě různé věci.
+
+   Mapa se ptá "má tenhle průměr vůbec smysl ukázat". To je vlastnost té jedné zóny:
+   stabilita průměru stojí na počtu měření v ní, ne na tom, kolik se v ten měsíc jezdilo
+   ve zbytku města. Proto absolutní počet. Relativní práh (0,1 % jízd měsíce) tady dělal
+   ze čtyř pětin města šedou plochu: v lednu 2025 to je ≥ 3 412 měření a projde jich
+   59 z 259 zón, i když těch 200 zbylých má hodnoty a dohromady necelá čtyři procenta
+   jízd. Mapa pak netvrdila "nevíme", ale "tady nic není" -- a to je jiné tvrzení.
+
+   Žebříček se ptá "která zóna je v tom nejvyšší", a to je jiná otázka: pořadí vybírá
+   extrémy, takže do prvních deseti se přes malý práh dostane zóna se 165 měřeními
+   a 23 mph -- žádné letiště, jen málo dat. Tam relativní práh zůstává.
+
+   Oba se měří na jmenovateli té konkrétní metriky, ne na počtu jízd -- zóna může mít
+   jízd dost a měření vzdálenosti skoro žádné. Součty práh nemají ani jeden: sto jízd
+   je sto jízd, na tom není co odhadovat. */
+const SHOW_MIN = 100;
+const RANK_SHARE = 0.001;
+const rankFloor = (m) => Math.round(monthAgg(m).trips * RANK_SHARE);
 const solid = (a, floor) => {
   if (SPEC().additive) return a.trips > 0;
   const v = SPEC().value(a);
@@ -372,7 +384,7 @@ const bucketOf = (v, edges) => edges.reduce((acc, e) => acc + (v >= e ? 1 : 0), 
 function drawMap(host, m) {
   const spec = SPEC();
   const aggs = zoneAggs(m);
-  const floor = floorOf(m);
+  const floor = SHOW_MIN;
   host.querySelectorAll("svg").forEach((n) => n.remove());
 
   // Rampa se mění po skupinách, ne po metrikách: odstín nese "čteš součet / průměr na
@@ -418,7 +430,7 @@ function drawMap(host, m) {
     // nasčítá skoro všude, za jeden měsíc ne.
     const missing = !a || !a.trips
       ? "v tomhle měsíci žádné jízdy"
-      : "málo jízd na průměr (" + nf.format(spec.obs(a) || 0) + " z " + nf.format(floor) + ")";
+      : "málo měření na průměr (" + nf.format(spec.obs(a) || 0) + " z " + nf.format(floor) + ")";
 
     // Bublina nese celý profil zóny, ne jen obarvenou metriku, a tučně je v něm to, čím
     // je zrovna obarveno. Přepínač tak nemění, co se dá přečíst -- jen kam se dívat.
@@ -460,7 +472,9 @@ function drawMap(host, m) {
   });
   host.appendChild(svg);
 
-  const grey = spec.additive ? "žádná jízda v tomhle měsíci" : "žádné jízdy nebo málo měření";
+  const grey = spec.additive
+    ? "žádná jízda v tomhle měsíci"
+    : "žádné jízdy nebo míň než " + nf.format(SHOW_MIN) + " měření";
   document.getElementById("map-legend").innerHTML =
     `<div><div class="steps">${lows.map((_, i) => `<i style="background:var(--m${i + 1})"></i>`).join("")}</div>`
     + `<div class="edges">${lows.map((v) => `<span>${spec.short(v)}</span>`).join("")}</div></div>`
@@ -471,7 +485,7 @@ function drawMap(host, m) {
   document.getElementById("map-foot").textContent =
     (spec.additive
       ? `${shown.size} z ${drawn} zón má ${inLabel(m)} aspoň jednu jízdu`
-      : `${shown.size} z ${drawn} zón má ${inLabel(m)} dost jízd na průměr`)
+      : `${shown.size} z ${drawn} zón má ${inLabel(m)} aspoň ${nf.format(SHOW_MIN)} měření na průměr`)
     + " · " + nf.format(off) + " jízd spadá do " + OFF_MAP.length
     + " kódů, které na žádné mapě obrys nemají (neznámé, mimo NYC)";
 }
@@ -543,7 +557,7 @@ function buildMeanMedian(m) {
 function drawZones(m) {
   const spec = SPEC();
   const aggs = zoneAggs(m);
-  const floor = floorOf(m);
+  const floor = rankFloor(m);
   const ranked = IDS.map((_, i) => i)
     .filter((i) => solid(aggs[i], floor))
     .sort((a, b) => spec.value(aggs[b]) - spec.value(aggs[a]))
@@ -553,7 +567,7 @@ function drawZones(m) {
   document.getElementById("zones-cap").textContent = spec.additive
     ? "Deset nejsilnějších zón nástupu " + inLabel(m) + ", podle zveřejněných jízd."
     : "Za " + lowerLabel(m) + ", jen zóny s aspoň 0,1 % jízd měsíce (≥ " + nf.format(floor)
-      + ") — bez prahu by žebříček vyhrála zóna s osmi jízdami.";
+      + ") — přísněji než mapa: pořadí vybírá extrémy a ty vyhraje zóna se stovkou jízd.";
 
   drawBars(document.getElementById("zones"), ranked.map((i) => {
     const a = aggs[i];
@@ -582,7 +596,9 @@ function buildTilesFor(m) {
   const days = m.daily.date.length;
   const value = spec.value(a);
   const aggs = zoneAggs(m);
-  const floor = floorOf(m);
+  // Dlaždice "nejvyšší zóna" je žebříček o jednom řádku, takže bere jeho práh, ne ten
+  // mapový: vítěz vybraný přes 100 měření je vítěz vybraný z šumu.
+  const floor = rankFloor(m);
 
   // Základna je celá historie spočítaná jako jeden řez, ne průměr měsíčních průměrů:
   // ten by dal každému měsíci stejnou váhu bez ohledu na to, kolik se v něm jezdilo.
@@ -689,7 +705,9 @@ function render() {
   document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu · " + lowerLabel(m);
   document.getElementById("map-cap").textContent = spec.additive
     ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najeďte na zónu a uvidíte celý její profil za tenhle měsíc, ne jen obarvenou metriku."
-    : "Barva je pořadí: šest pásem, v každém stejný počet zón. Šedé zóny mají průměr z míň než 0,1 % jízd měsíce — pásma se počítají bez nich, ať hranice barev neurčuje šum.";
+    : "Barva je pořadí: šest pásem, v každém stejný počet zón. Šedé zóny mají za tenhle měsíc míň než "
+      + nf.format(SHOW_MIN) + " měření — pásma se počítají bez nich, ať hranice barev neurčuje šum."
+      + " Žebříček zón níž má práh vyšší: pořadí vybírá extrémy, a ty malá zóna vyhraje snadno.";
   drawMap(document.getElementById("zonemap"), m);
 
   document.getElementById("history-title").textContent = spec.label + " měsíc po měsíci";
