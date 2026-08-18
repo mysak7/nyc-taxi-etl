@@ -229,9 +229,8 @@ function buildTilesFor(m, run) {
   ]);
 
   document.getElementById("kpis-cap").textContent = MONTHS.length > 1
-    ? label(m) + " — vybraný měsíc. Přepíná se kliknutím na sloupec grafu, na řádek"
-      + " tabulky níž, nebo přepínačem u rozpisu. Součet za celé období (" + SPAN + ")"
-      + " je v řádku „celkem“ v tabulce."
+    ? label(m) + " — vybraný měsíc. Součet za celé období (" + SPAN + ") je v řádku"
+      + " „celkem“ v tabulce."
     : "Jediná zpracovaná partition " + SPAN + ".";
 }
 
@@ -285,7 +284,7 @@ function buildHeader() {
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 
   document.getElementById("stack-cap").textContent =
-    "Podíl řádků mimo výstup na zdrojových řádcích, " + SPAN + ". Kliknutím na sloupec se níž načte rozpis toho měsíce.";
+    "Podíl řádků mimo výstup na zdrojových řádcích, " + SPAN + ". Kliknutím na sloupec se načte rozpis měsíce.";
 
   document.getElementById("stack-legend").innerHTML = STACK_ORDER.map(
     (name) => `<span><i class="swatch" style="background:${STACK_FILL[name]}"></i>${ruleLabel(name, APPLIED)}</span>`
@@ -329,8 +328,8 @@ function render() {
   }).join("");
 
   document.getElementById("rules-cap").textContent =
-    label(m) + " — " + nf.format(run.rows.input) + " posouzených zdrojových řádků. Pravidla se"
-    + " počítají nezávisle: jeden řádek může porušit několik naráz.";
+    label(m) + " — " + nf.format(run.rows.input) + " posouzených zdrojových řádků."
+    + " Pravidla se počítají nezávisle.";
 
   // Kolik řádků porušilo obě pravidla na celý řádek zároveň. Manifest to přímo nenese,
   // ale plyne to z rozdílu: součet dotčených minus ti, co doopravdy z výstupu vypadli.
@@ -340,12 +339,9 @@ function render() {
   document.getElementById("overlap").innerHTML = overlap > 0
     ? `Pravidla na celý řádek se dotkla ${nf.format(flagged)} řádků, z výstupu jich vypadlo `
       + `${nf.format(removed)}: ${plural(overlap, "řádek", "řádky", "řádků")} porušil`
-      + `${overlap === 1 ? "" : "y"} obě naráz a počítá se jednou. Štítek `
-      + `<code>reject_reason</code> se přiděluje podle pořadí pravidel, od nejvzácnějšího: `
-      + `stornovaná jízda z jiného měsíce je tedy <em>mimo měsíc</em> a do storn tohohle `
-      + `měsíce se nezapočítá.`
+      + `${overlap === 1 ? "" : "y"} obě naráz a počítá se jednou, podle vzácnějšího pravidla.`
     : `Pravidla na celý řádek se dotkla ${nf.format(flagged)} řádků a přesně tolik jich `
-      + `z výstupu vypadlo: v tomhle měsíci neporušil žádný řádek obě naráz.`;
+      + `z výstupu vypadlo: žádný řádek neporušil obě naráz.`;
 }
 
 buildHeader();

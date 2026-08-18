@@ -64,7 +64,7 @@ const METRICS = {
     additive: true,
     label: "Zveřejněné jízdy",
     peak: "Nejvytíženější nástup",
-    about: "Počet jízd přiřazených k zóně nástupu. Jediná metrika, která se nedělí ničím: součet je přesný.",
+    about: "Počet jízd podle zóny nástupu. Jediná metrika, která se nedělí ničím.",
     value: (a) => a.trips,
     obs: () => null,
     full: (v) => nf.format(v) + " jízd",
@@ -76,7 +76,7 @@ const METRICS = {
     additive: true,
     label: "Tržby",
     peak: "Nejvýdělečnější zóna",
-    about: "<code>total_amount</code> zveřejněných jízd — se spropitným, mýtným i příplatky — minus storna. Hrubá částka i objem storen mají v curated vlastní sloupce.",
+    about: "<code>total_amount</code> zveřejněných jízd — se spropitným, mýtným i příplatky — minus storna.",
     value: net,
     obs: () => null,
     full: (v) => usd(v),
@@ -87,7 +87,7 @@ const METRICS = {
     group: "means",
     label: "Tržba / jízdu",
     peak: "Nejdražší jízda",
-    about: "Čisté tržby dělené počtem jízd. Celkovou částku nese každý řádek, takže je tenhle jmenovatel přesný. Čitatel je po odečtení storen, jmenovatel bez nich: storno není jízda.",
+    about: "Čisté tržby dělené počtem jízd. Čitatel je po odečtení storen, jmenovatel bez nich: storno není jízda.",
     value: (a) => div(net(a), a.trips),
     obs: (a) => a.trips,
     full: (v) => "$" + nf2.format(v),
@@ -97,7 +97,7 @@ const METRICS = {
     group: "means",
     label: "Průměrné jízdné",
     peak: "Nejvyšší jízdné",
-    about: "Jen <code>fare_amount</code>: taxametr bez spropitného, mýtného a příplatků. Vždy nižší než tržba na jízdu; rozdíl jsou právě příplatky.",
+    about: "Jen <code>fare_amount</code>: taxametr bez spropitného, mýtného a příplatků.",
     value: avgFare,
     obs: (a) => a.fare_obs,
     full: (v) => "$" + nf2.format(v),
@@ -110,7 +110,7 @@ const METRICS = {
     label: "Průměrná vzdálenost",
     peak: "Nejdelší jízdy",
     median: "median_dist",
-    about: "Míle na jízdu. Průměr táhne nahoru několik extrémních řádků, tabulka dole ho staví vedle mediánu.",
+    about: "Míle na jízdu. Průměr táhnou nahoru extrémní řádky, tabulka dole ho staví vedle mediánu.",
     value: avgDist,
     obs: (a) => a.dist_obs,
     full: (v) => nf2.format(v) + " mi",
@@ -121,7 +121,7 @@ const METRICS = {
     label: "Průměrná doba jízdy",
     peak: "Nejdelší čas v autě",
     median: "median_dur",
-    about: "Minuty na jízdu, od nástupu po výstup. Nekladné doby vynuluje pravidlo kvality a do průměru nevstupují.",
+    about: "Minuty na jízdu, od nástupu po výstup. Nekladné doby do průměru nevstupují.",
     value: avgDur,
     obs: (a) => a.dur_obs,
     full: (v) => nf1.format(v) + " min",
@@ -132,7 +132,7 @@ const METRICS = {
     label: "Odvozená rychlost",
     peak: "Nejrychlejší zóna",
     median: "median_dur",
-    about: "Průměrná vzdálenost dělená průměrnou dobou: podíl dvou průměrů, ne průměr rychlostí, a každý stojí na jiné množině řádků. Kde je pokrytí vzdálenosti výrazně pod pokrytím doby, je výsledek nespolehlivý; bublina proto nese obě čísla.",
+    about: "Průměrná vzdálenost dělená průměrnou dobou: podíl dvou průměrů, ne průměr rychlostí. Kde je pokrytí vzdálenosti výrazně pod pokrytím doby, je výsledek nespolehlivý.",
     value: (a) => (a.dist_obs > 0 && a.dur_sum > 0 ? div(avgDist(a), avgDur(a), 60) : null),
     obs: (a) => Math.min(a.dist_obs, a.dur_obs),
     full: (v) => nf1.format(v) + " mph",
@@ -143,7 +143,7 @@ const METRICS = {
     label: "Jízdné / míli",
     peak: "Nejdražší míle",
     median: "median_dist",
-    about: "Průměrné jízdné dělené průměrnou vzdáleností. Vysoké u krátkých jízd s popojížděním, nízké na dlouhých tazích: taxametr účtuje čas i vzdálenost.",
+    about: "Průměrné jízdné dělené průměrnou vzdáleností. Vysoké u krátkých jízd, nízké na dlouhých tazích: taxametr účtuje čas i vzdálenost.",
     value: (a) => (a.fare_obs > 0 && a.dist_sum > 0 ? div(avgFare(a), avgDist(a)) : null),
     obs: (a) => Math.min(a.fare_obs, a.dist_obs),
     full: (v) => "$" + nf2.format(v) + " / mi",
@@ -568,9 +568,8 @@ function buildMeanMedian(m) {
 
   document.getElementById("mm-title").textContent = "Průměr vedle mediánu — " + view.title;
   document.getElementById("mm-cap").innerHTML =
-    `Dvanáct nejvytíženějších zón ${inLabel(m)}. Extrémní řádky táhnou průměr nahoru,`
-    + ` medián zůstává. Pokrytí je podíl jízd, na kterých se průměr dal změřit. Medián je`
-    + ` medián denních mediánů: mediány se přes partition nesčítají.`;
+    `Dvanáct nejvytíženějších zón ${inLabel(m)}. Pokrytí je podíl jízd, na kterých se`
+    + ` průměr dal změřit; medián je medián denních mediánů.`;
   document.getElementById("mm-head").innerHTML =
     "<tr><th>Zóna</th><th>Obvod</th><th class='num'>Jízdy</th>"
     + `<th class='num'>Průměr (${view.unit})</th><th class='num'>Medián (${view.unit})</th>`
@@ -607,7 +606,7 @@ function drawZones(m) {
   document.getElementById("zones-cap").textContent = spec.additive
     ? "Deset nejvytíženějších zón nástupu " + inLabel(m) + ", podle zveřejněných jízd."
     : "Za " + lowerLabel(m) + ", jen zóny s aspoň 0,1 % jízd měsíce (≥ " + nf.format(floor)
-      + "). Přísnější práh než mapa: pořadí vybírá extrémy, a ty vyhraje zóna se stovkou jízd.";
+      + "). Přísnější práh než mapa: pořadí vybírá extrémy.";
 
   drawBars(document.getElementById("zones"), ranked.map((i) => {
     const a = aggs[i];
@@ -680,8 +679,8 @@ function buildTilesFor(m) {
   buildTiles(tiles);
 
   document.getElementById("kpis-cap").innerHTML =
-    longLabel(m) + " proti celé historii (" + SPAN + "). Tržby jsou po odečtení storen,"
-    + " která byla " + inLabel(m) + " " + pct(-a.refunds / a.revenue) + " hrubého objemu.";
+    longLabel(m) + " proti celé historii (" + SPAN + "). Tržby jsou po odečtení storen —"
+    + " " + pct(-a.refunds / a.revenue) + " hrubého objemu.";
 }
 
 /* ---------- statické části ---------- */
@@ -749,10 +748,9 @@ function renderMap(m) {
   const spec = SPEC();
   document.getElementById("map-title").textContent = spec.label + " podle zóny nástupu · " + lowerLabel(m);
   document.getElementById("map-cap").textContent = spec.additive
-    ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najetím na zónu se zobrazí celý její profil za tenhle měsíc."
-    : "Barva je pořadí: šest pásem, v každém stejný počet spočítatelných zón. Šedé mají za tenhle měsíc míň"
-      + " měření, než žádá posuvník. Pásma na posuvníku nezávisí, takže tažení mapu nepřebarvuje, jen posílá"
-      + " zóny do šedé a zpátky. Žebříček zón níž má práh pevný a vyšší: pořadí vybírá extrémy.";
+    ? "Barva je pořadí: šest pásem, v každém stejný počet zón. Najetím na zónu se zobrazí její profil."
+    : "Barva je pořadí: šest pásem, v každém stejný počet spočítatelných zón. Šedé mají míň měření, než"
+      + " žádá posuvník; pásma na něm nezávisí. Žebříček zón níž má práh pevný a vyšší.";
   drawMap(document.getElementById("zonemap"), m);
 }
 
