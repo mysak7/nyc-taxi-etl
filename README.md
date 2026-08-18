@@ -31,3 +31,9 @@ dags/     Airflow DAG
 infra/    Terraform: S3, ECR, Lambda, Step Functions, IAM
 web/      build.py staví statické stránky z curated (Cloudflare Pages)
 ```
+
+## Data a licence
+
+Zdroj je [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
+včetně číselníku a shapefilu zón; vzorky v `tests/data/` jsou z něj odvozené. Kód je pod
+[MIT](LICENSE).

@@ -21,6 +21,9 @@ jobs:
   image:
     needs: test
     runs-on: ubuntu-latest
+    # Fork nedostane `id-token: write`, takže by mu přihlášení do AWS spadlo a každý
+    # cizí PR by svítil červeně. Že se image postaví, ověří push na master.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       packages: write
