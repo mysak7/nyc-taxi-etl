@@ -160,8 +160,8 @@ PAGES = {
     "method.html": (
         "method",
         "Metodika a kvalita dat NYC Taxi",
-        "Proč zveřejněná čísla vypadají, jak vypadají: co by stála jednodušší varianta,"
-        " jak se změřily prahy a jaká omezení výstup nese.",
+        "Rozhodnutí za zveřejněnými čísly: co by stála jednodušší varianta, jak se"
+        " změřily prahy a jaká omezení výstup nese.",
         ("key", "year", "month", "rows", "trips", "runs"),
     ),
     "pipeline.html": (
@@ -175,7 +175,7 @@ PAGES = {
     # v manifestu není. Mapa ani denní řady tu nemají co dělat.
     "quarantine.html": (
         "quarantine",
-        "Karanténa NYC Taxi: co se vyhodilo",
+        "Karanténa NYC Taxi: vyřazené řádky",
         "Které řádky datasetu newyorských taxíků neprošly, měsíc po měsíci: důvod,"
         " počet, podíl a objem storn.",
         ("key", "year", "month", "rows", "refunds", "runs"),
