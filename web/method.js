@@ -153,9 +153,9 @@ function buildHeader() {
   buildEyebrow();
 
   buildChips([
-    { dot: "good", text: "prahy změřené na " + SPAN + ", ne odhadnuté" },
+    { dot: "good", text: "prahy změřené na " + SPAN },
     { dot: "good", text: "každý běh zapisuje prahy, podle kterých jel" },
-    { dot: "info", text: "nic se nemaže · odmítnuté řádky zůstávají s důvodem" },
+    { dot: "info", text: "nic se nemaže · odmítnuté řádky si nesou důvod" },
   ]);
 
   const ruleNames = new Set(LATEST.flatMap((r) => Object.keys(r.rules)));
@@ -166,12 +166,12 @@ function buildHeader() {
 
   buildTiles([
     { k: "Platná pravidla", v: nf.format(ruleNames.size), s: wholeRow + " bere celý řádek · " + (ruleNames.size - wholeRow) + " odmítá jedno pole" },
-    { k: "Posouzené zdrojové řádky", v: nf1.format(INPUT / 1e6) + " mil.", s: "každý řádek období " + SPAN + " jimi prošel" },
+    { k: "Posouzené zdrojové řádky", v: nf1.format(INPUT / 1e6) + " mil.", s: "všechny řádky období " + SPAN + "" },
     // Rozsah patří do nadpisu i tady, kde je hodnota podíl: pod ním stojí počet za celou
     // historii, a ten se v žádném jednotlivém měsíci najít nedá.
     { k: "Řádky v karanténě" + SUM_SCOPE, v: pct(rejected / INPUT), s: nf.format(rejected) + " řádků, každý se svým důvodem" },
     { k: "Stornované řádky" + SUM_SCOPE, v: pct(reversed / INPUT), s: nf.format(reversed) + " protizápisů, peníze jdou do refunds_usd" },
-    { k: "Vynulovaná pole" + SUM_SCOPE, v: nf.format(nulled), s: "hodnoty zahozeny, řádky i peníze zůstávají" },
+    { k: "Vynulovaná pole" + SUM_SCOPE, v: nf.format(nulled), s: "hodnota zahozena, řádek i peníze zůstávají" },
   ]);
 
   specRows("spec-sev", [

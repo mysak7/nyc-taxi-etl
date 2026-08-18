@@ -2,17 +2,16 @@
   <p class="eyebrow" id="src"></p>
   <h1>Co se ve výstupu nepočítá</h1>
   <p class="lead">
-    Ne všechno, co z výstupu vypadne, je vada — a plést to dohromady je nejrychlejší cesta
-    ke špatnému obrázku o datasetu. Tady je měsíc po měsíci, co se nepočítá a proč, podle
-    manifestu posledního běhu nad tou partition.
+    Ne všechno, co z výstupu vypadne, je vada. Tady je měsíc po měsíci, co se nepočítá
+    a proč, podle manifestu posledního běhu nad tou partition.
   </p>
   <p class="lead">
-    Způsoby jsou tři. <strong>Karanténa</strong> je „tomuhle řádku nevěřím“ — v praxi jízdy
-    mimo zpracovávaný měsíc. <strong>Storno</strong> je „věřím, jen to není jízda“: záporný
-    protizápis k odjeté jízdě. Jízdou se nepočítá, aby se ta původní nezapočítala dvakrát,
-    ale <em>peníze zůstávají</em> — jdou do <code>refunds_usd</code> a odečtou se od hrubé
-    tržby. <strong>Vynulování</strong> zahodí jednu hodnotu: řádek, jízda i peníze zůstávají,
-    jen přestane mluvit do průměru, který by zkreslil.
+    Způsoby jsou tři. <strong>Karanténa</strong> znamená nedůvěryhodný řádek — v praxi jízdy
+    mimo zpracovávaný měsíc. <strong>Storno</strong> je záporný protizápis k odjeté jízdě:
+    jízdou se nepočítá, aby se ta původní nezapočítala dvakrát, ale peníze zůstávají — jdou
+    do <code>refunds_usd</code> a odečtou se od hrubé tržby. <strong>Vynulování</strong>
+    zahodí jednu hodnotu: řádek, jízda i peníze zůstávají, jen se ta hodnota nepočítá do
+    svého průměru.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -30,8 +29,8 @@
   <p class="note">
     Sloupec je měsíc, výška podíl řádků mimo výstup. Každá kategorie má vlastní práh —
     karanténa <strong id="reject-limit"></strong>, storna <strong id="reversal-limit"></strong> —
-    a překročení kteréhokoli měsíc nezveřejní. Společný práh by dělal z vlny reklamací
-    u dodavatele rozbitá data.
+    a překročení kteréhokoli z nich měsíc nezveřejní. Společný práh by vlnu reklamací
+    u dodavatele vykázal jako rozbitá data.
   </p>
   <div class="card">
     <h3>Podíl řádků mimo výstup</h3>
@@ -49,8 +48,8 @@
   <p class="note">
     Vlevo řádky, které <strong>z výstupu vypadly</strong> (leží v Parquetu vyřazených, každý
     se svým důvodem), vpravo <strong>vynulovaná pole</strong> (řádek zůstává, ztrácí jedno
-    měření). Řádek může porušit karanténní i stornovací pravidlo naráz — pak se počítá
-    jednou, podle vzácnějšího z nich.
+    měření). Řádek může porušit karanténní i stornovací pravidlo naráz; pak se počítá jednou,
+    podle vzácnějšího z nich.
   </p>
   <div class="scroll">
     <table class="runs" id="ledger-table">
@@ -120,30 +119,27 @@
 <section>
   <div class="card">
     <h3>Kde ty řádky leží</h3>
-    <p class="cap">Nic se nemaže. Vyřazený řádek se zapisuje celý, i se svým důvodem.</p>
+    <p class="cap">Nic se nemaže. Vyřazený řádek se zapisuje celý, včetně důvodu.</p>
     <dl class="spec" id="spec-keep"></dl>
     <p class="note">
-      Stránka se staví <strong>jen z manifestů ve vrstvě curated</strong> — role, která ji
-      v CI sestavuje, na <code>rejects/</code> ani <code>raw/</code> nedosáhne. Proto tu jsou
-      počty a důvody, ne samotné řádky: veřejná stránka nemá nést surová data a build k nim
-      nemá mít přístup. Kdo potřebuje konkrétní řádky, čte <code>rejects.parquet</code>
+      Stránka se staví <strong>jen z manifestů ve vrstvě curated</strong>: role, která ji
+      v CI sestavuje, na <code>rejects/</code> ani <code>raw/</code> nedosáhne. Proto jsou tu
+      počty a důvody, ne samotné řádky. Konkrétní řádky jsou v <code>rejects.parquet</code>
       v bucketu.
     </p>
     <p class="note">
       <strong>Co storna neměří.</strong> Protizápisy posílá jediný dodavatel: v lednu 2025
       pochází všech 63&nbsp;037 od <code>VendorID&nbsp;2</code>, zatímco
-      <code>VendorID&nbsp;1</code> nemá se 754 tisíci jízdami ani jeden — přestože sporné
+      <code>VendorID&nbsp;1</code> nemá se 754 tisíci jízdami ani jeden, přestože sporné
       jízdy hlásí (4&nbsp;936 řádků s <code>payment_type&nbsp;4</code>). Skutečný objem
-      vratek je tedy vyšší než <code>refunds_usd</code>; o zbytku dataset záznam nemá.
-      Srovnávat míru storn mezi zónami dává smysl jen při podobném vendor mixu a skok v řadě
-      může být změna praxe dodavatele, ne chování cestujících.
+      vratek je tedy vyšší než <code>refunds_usd</code>. Míru storn lze mezi zónami srovnávat
+      jen při podobném vendor mixu a skok v řadě může být změna praxe dodavatele.
     </p>
     <p class="note">
       Starší manifesty znají jen společné pravidlo <code>nonpositive_total</code>. Build je
       dopočítá a takový měsíc nese v tabulce hvězdičku: v penězích i v karanténě je překlad
-      přesný, ale storna nadhodnocuje o jízdy s nulovou tržbou, které se ve starém čísle
-      schovaly (v lednu 2025 559 z 63&nbsp;596, tedy 0,9&nbsp;%). Přepočet partition to
-      srovná.
+      přesný, ale storna nadhodnocuje o jízdy s nulovou tržbou (v lednu 2025 559
+      z 63&nbsp;596, tedy 0,9&nbsp;%). Přepočet partition to srovná.
     </p>
   </div>
 </section>
@@ -151,8 +147,8 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>Proč jsou pravidla taková</b> — proti čemu se každý práh měřil a co by zahazování
-      celých řádků stálo.
+      <b>Proč jsou pravidla taková</b> — proti čemu se každý práh měřil a co by stálo
+      zahazování celých řádků.
     </p>
     <a href="method.html">◂ Metodika</a>
   </div>
@@ -168,7 +164,7 @@
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
     Počítáno z nejnovějšího manifestu každé partition. Starší popisují data, která už
-    v curated nejsou — sečíst je dohromady by karanténu nafouklo o přepočty téhož měsíce.
+    v curated nejsou; jejich součet by karanténu nafoukl o přepočty téhož měsíce.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

@@ -1,13 +1,13 @@
 <header>
   <p class="eyebrow" id="src"></p>
-  <h1>Polemika s daty</h1>
+  <h1>Metodika a kvalita dat</h1>
   <p class="lead">
-    Každé číslo na datové stránce mělo i druhou, snazší odpověď. Tady je u každého sporu
-    ten samozřejmý krok, co by stál a co místo toho dělá pipeline.
+    U každého čísla na datové stránce existovala i jednodušší varianta zpracování. Níž je
+    u šesti rozhodnutí ta jednodušší cesta, co by stála a co místo ní dělá pipeline.
   </p>
   <p class="lead">
-    Žádný práh se neodhadoval: každý se změřil na celé historii a je zapsaný u běhu, který
-    podle něj jel — loňské číslo se tak pořád dá číst proti pravidlu, které ho vyrobilo.
+    Prahy nejsou odhadnuté: každý je změřený na celé historii a zapsaný v manifestu běhu,
+    který podle něj jel. Starší číslo se tak dá číst proti pravidlu, které ho vyrobilo.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -18,56 +18,55 @@
 
 <section>
   <div class="sec-head">
-    <h2>Šest sporů</h2>
-    <p class="hint">každý rozhodnutý měřením, ne názorem</p>
+    <h2>Šest rozhodnutí</h2>
+    <p class="hint">každé změřené na celé historii</p>
   </div>
   <p class="note">
-    Zdroj je veřejný výpis toho, co nahlásily taxametry a terminály: jsou v něm jízdy na
-    276 423 mil, jízdy končící dřív, než začnou, a záporné jízdné. Ne důvod datům nevěřit —
-    důvod nahlas říct, co se s tím udělalo.
+    Zdroj je veřejný výpis toho, co nahlásily taxametry a terminály. Jsou v něm jízdy na
+    276 423 mil, jízdy končící dřív, než začnou, a záporné jízdné. Níž je, co se s tím dělá.
   </p>
 
   <div class="card arg">
-    <h3>Rozbitá hodnota — je celá jízda k ničemu?</h3>
+    <h3>Rozbitá hodnota — zahodit celou jízdu?</h3>
     <div class="case">
       <div class="side">
-        <span class="l">Snadné řešení</span>
+        <span class="l">Snadná varianta</span>
         <p>Zahodit každý řádek, který poruší pravidlo. Jeden filtr, každý sloupec čistý.</p>
       </div>
       <div class="side no">
-        <span class="l">Co to stojí</span>
-        <p>2,32 mil. $ jízdného a 88 743 jízd pryč, průměrná vzdálenost se posune o 0,1 % — 3,166 mi místo 3,169. Skutečné tržby za zaokrouhlovací rozdíl.</p>
+        <span class="l">Co by stála</span>
+        <p>2,32 mil. $ jízdného a 88 743 jízd pryč. Průměrná vzdálenost se posune o 0,1 % — 3,166 mi místo 3,169.</p>
       </div>
       <div class="side yes">
-        <span class="l">Co děláme my</span>
-        <p>Účtenka je fakt; měření jsou její vlastnosti. Špatná <em>hodnota</em> se vynuluje a vypadne ze svého vlastního průměru. Řádek i jeho peníze zůstávají.</p>
+        <span class="l">Co dělá pipeline</span>
+        <p>Vynuluje se jen vadná hodnota a vypadne ze svého vlastního průměru. Řádek, jízda i peníze zůstávají.</p>
       </div>
     </div>
     <p class="ev">
-      Celý řádek opouští <code>trips</code> ve dvou případech a jen jeden je vada. Do
-      <strong>karantény</strong> jde jízda mimo zpracovávaný měsíc — v lednu 2025 22 řádků
-      z 3,48 milionu. <strong>Storno</strong> je záporný protizápis, 1,81 % ledna 2025:
-      jízda to není (ta původní by se počítala dvakrát), ale objem se místo tichého smazání
-      vykazuje jako <code>refunds_usd</code> a odečítá — hrubá částka by tržbu přeceňovala
-      právě o těch 1,81 % (90,66 mil. $ hrubě, 1,66 mil. $ storna). Odečítat se dá, protože
-      storna jdou pravidelně: 1,5–2,0 % objemu denně, jen 1. leden má 3,8 %.
+      Celý řádek opouští <code>trips</code> ve dvou případech. Do <strong>karantény</strong>
+      jde jízda mimo zpracovávaný měsíc — v lednu 2025 22 řádků z 3,48 milionu.
+      <strong>Storno</strong> je záporný protizápis, 1,81 % ledna 2025: jízda to není (ta
+      původní by se počítala dvakrát), ale objem se vykazuje jako <code>refunds_usd</code>
+      a odečítá se. Hrubá částka by tržbu přeceňovala právě o těch 1,81 % (90,66 mil. $
+      hrubě, 1,66 mil. $ storna). Storna jdou pravidelně: 1,5–2,0 % objemu denně, jen
+      1. leden má 3,8 %.
     </p>
   </div>
 
   <div class="card arg">
-    <h3>Který průměr je ten poctivý?</h3>
+    <h3>Publikovat průměr, nebo i medián?</h3>
     <div class="case">
       <div class="side">
-        <span class="l">Snadné řešení</span>
+        <span class="l">Snadná varianta</span>
         <p>Zveřejnit průměr. Ptají se na něj všichni a je jeden <code>AVG()</code> daleko.</p>
       </div>
       <div class="side no">
-        <span class="l">Co to stojí</span>
-        <p>122 řádků z 3 475 226 — 0,0035 % — nese 47 % všech ujetých mil. Nejdelší jediná „jízda“ měří 276 423 mil; obvod Země je 24 901. Naivní průměr střílí o 89 % vedle.</p>
+        <span class="l">Co by stála</span>
+        <p>122 řádků z 3 475 226 — 0,0035 % — nese 47 % všech ujetých mil. Nejdelší jediná „jízda“ měří 276 423 mil; obvod Země je 24 901. Naivní průměr je o 89 % vedle.</p>
       </div>
       <div class="side yes">
-        <span class="l">Co děláme my</span>
-        <p>Publikují se oba vedle sebe. Medián (1,67 mi) se nehne, ani když je konec rozdělení absurdní; průměr ano — a smysl je vidět, jak se rozcházejí.</p>
+        <span class="l">Co dělá pipeline</span>
+        <p>Publikuje oba vedle sebe. Medián vzdálenosti (1,67 mi) se s extrémy nehne, průměr ano; rozdíl mezi nimi je sám o sobě údaj.</p>
       </div>
     </div>
     <p class="ev">
@@ -79,23 +78,23 @@
     <h3>Je 165 mil dlouhá jízda, nebo rozbitý tachometr?</h3>
     <div class="case">
       <div class="side">
-        <span class="l">Snadné řešení</span>
-        <p>Omezit vzdálenost velikostí: cokoli přes 200 mil není jízda taxíkem.</p>
+        <span class="l">Snadná varianta</span>
+        <p>Omezit vzdálenost stropem: cokoli přes 200 mil není jízda taxíkem.</p>
       </div>
       <div class="side no">
-        <span class="l">Co to stojí</span>
-        <p>Obě chyby naráz: minulo 136 rozbitých jízd pod stropem — 165,91 mi za 11,4 minuty za 17,70 $ — a vynulovalo dva skutečné dálkové tahy 206 a 225 mi při 53–59 mph za 220 a 400 $ pod sazbou 5.</p>
+        <span class="l">Co by stála</span>
+        <p>Chybí oběma směry: minula 136 rozbitých jízd pod stropem — 165,91 mi za 11,4 minuty za 17,70 $ — a vynulovala dva skutečné dálkové tahy, 206 a 225 mi při 53–59 mph za 220 a 400 $ pod sazbou 5.</p>
       </div>
       <div class="side yes">
-        <span class="l">Co děláme my</span>
-        <p>Vzdálenost se posuzuje podle poměru k době jízdy, ne podle velikosti. Velikost zůstává jako záchranná brzda pro jízdy pod minutu, kde poměr nic neznamená.</p>
+        <span class="l">Co dělá pipeline</span>
+        <p>Posuzuje vzdálenost podle poměru k době jízdy, ne podle velikosti. Strop zůstává jako záchranná brzda pro jízdy pod minutu, kde poměr nic neznamená.</p>
       </div>
     </div>
     <p class="ev">
-      Které pole je rozbité, plyne z peněz: u 93 % řádků nad 100 mph sedí jízdné na dobu
-      jízdy, ne na vzdálenost — medián 14,46 $ proti 301 $ plynoucím z tachometru. Nuluje se
-      tedy tachometr a časy zůstávají. 118 ze 122 jízd přes 200 mi stejně poruší pravidlo
-      rychlosti, takže sražením stropu velikosti na záchrannou brzdu se nic neztratilo.
+      Které pole je rozbité, plyne z peněz: u 93 % řádků nad 100 mph odpovídá jízdné době
+      jízdy, ne vzdálenosti — medián 14,46 $ proti 301 $ plynoucím z tachometru. Nuluje se
+      tedy vzdálenost a časy zůstávají. 118 ze 122 jízd přes 200 mi poruší i pravidlo
+      rychlosti, takže sražením stropu na záchrannou brzdu se nic neztratilo.
     </p>
   </div>
 
@@ -103,42 +102,42 @@
     <h3>Jedno číslo pokrytí, nebo jedno na řádek?</h3>
     <div class="case">
       <div class="side">
-        <span class="l">Snadné řešení</span>
-        <p>Změřit úplnost jednou, do poznámky pod čarou „vzdálenost je z 97,5 % úplná“ a jít dál.</p>
+        <span class="l">Snadná varianta</span>
+        <p>Změřit úplnost jednou a dát do poznámky pod čarou: „vzdálenost je z 97,5 % úplná“.</p>
       </div>
       <div class="side no">
-        <span class="l">Co to stojí</span>
-        <p>Globální poznámka je lokálně k ničemu. Letiště Newark má 3. ledna 2025 28 jízd a jedno použitelné měření vzdálenosti. Jeho „průměr“ je jedno číslo převlečené za množné.</p>
+        <span class="l">Co by stála</span>
+        <p>Globální číslo lokálně neplatí. Letiště Newark má 3. ledna 2025 28 jízd a jedno použitelné měření vzdálenosti — jeho „průměr“ stojí na jediné hodnotě.</p>
       </div>
       <div class="side yes">
-        <span class="l">Co děláme my</span>
-        <p>Každý průměr nese svůj vlastní jmenovatel — <code>distance_obs</code>, <code>duration_obs</code>, <code>fare_obs</code> — na zónu a na den. „Změřeno na kolika jízdách“ je sloupec, ne výhrada.</p>
+        <span class="l">Co dělá pipeline</span>
+        <p>Každý průměr nese vlastní jmenovatel — <code>distance_obs</code>, <code>duration_obs</code>, <code>fare_obs</code> — na zónu a na den. „Změřeno na kolika jízdách“ je sloupec, ne poznámka.</p>
       </div>
     </div>
     <p class="ev">
-      Vzdálenost a doba jízdy mají různé jmenovatele, takže se publikují oba. Rychlost na
-      mapě stojí na obou a je věrohodná jen tak jako ten menší z nich.
+      Vzdálenost a doba jízdy mají různé jmenovatele, proto se publikují oba. Rychlost na
+      mapě stojí na obou a platí jen do míry toho menšího z nich.
     </p>
   </div>
 
   <div class="card arg">
-    <h3>Mají se časy převést na UTC?</h3>
+    <h3>Převádět časy na UTC?</h3>
     <div class="case">
       <div class="side">
-        <span class="l">Snadné řešení</span>
-        <p>Naivní časy zavánějí. Lokalizovat je, ukládat UTC a vyřešit to při čtení.</p>
+        <span class="l">Snadná varianta</span>
+        <p>Naivní časy lokalizovat, ukládat v UTC a řešit až při čtení.</p>
       </div>
       <div class="side no">
-        <span class="l">Co to stojí</span>
-        <p>Už teď jsou v newyorském místním čase. Převod by posunul každou noční jízdu do špatného dne — a nic by to nechytilo, součty zůstanou identické.</p>
+        <span class="l">Co by stála</span>
+        <p>Časy už v newyorském místním čase jsou. Převod by posunul noční jízdy do jiného dne a nic by neopravil — součty zůstanou identické.</p>
       </div>
       <div class="side yes">
-        <span class="l">Co děláme my</span>
-        <p>Bereme je jako naivní místní čas, což jsou, a partitionujeme podle místního data nástupu.</p>
+        <span class="l">Co dělá pipeline</span>
+        <p>Bere je jako naivní místní čas, což jsou, a partitionuje podle místního data nástupu.</p>
       </div>
     </div>
     <p class="ev">
-      Důkaz je změna času: 9. března 2025 mezi 02:00 a 03:00 nejsou v datech žádné jízdy,
+      Doklad je změna času: 9. března 2025 nejsou mezi 02:00 a 03:00 v datech žádné jízdy,
       běžná neděle jich má ve stejnou hodinu 4 809. Omezení: doby jízd přes tuhle hodinu
       jsou vedle o ±1 h.
     </p>
@@ -148,16 +147,16 @@
     <h3>Říká tohle, kolik New Yorčané utratí za taxi?</h3>
     <div class="case">
       <div class="side">
-        <span class="l">Snadné řešení</span>
-        <p>Pojmenovat tabulku <code>taxi_trips</code>, sloupec <code>revenue</code>, a nechat čtenáře, ať si domyslí.</p>
+        <span class="l">Snadná varianta</span>
+        <p>Pojmenovat tabulku <code>taxi_trips</code> a sloupec <code>revenue</code>.</p>
       </div>
       <div class="side no">
-        <span class="l">Co to stojí</span>
-        <p>Žluté taxíky jsou 12,4 % útraty za placenou přepravu a mimo Manhattan pod 1,5 %. Na otázku „kolik se v Bronxu utratilo za taxi“ odpoví tenhle výstup číslem 122× menším.</p>
+        <span class="l">Co by stála</span>
+        <p>Žluté taxíky jsou 12,4 % útraty za placenou přepravu a mimo Manhattan pod 1,5 %. Na otázku „kolik se v Bronxu utratilo za taxi“ odpovídá tenhle výstup číslem 122× menším.</p>
       </div>
       <div class="side yes">
-        <span class="l">Co děláme my</span>
-        <p>Omezení patří do jmen. Tabulka se jmenuje <code>yellow_taxi_trips_by_zone</code>, sloupec <code>yellow_revenue_usd</code> a mapa to říká pod svým titulkem.</p>
+        <span class="l">Co dělá pipeline</span>
+        <p>Dává omezení do jmen: tabulka <code>yellow_taxi_trips_by_zone</code>, sloupec <code>yellow_revenue_usd</code>, a mapa to říká pod svým titulkem.</p>
       </div>
     </div>
     <p class="ev">
@@ -169,19 +168,19 @@
 
 <section>
   <div class="sec-head">
-    <h2>Jak pracujeme</h2>
+    <h2>Jak vzniká pravidlo</h2>
     <p class="hint">změřit · zapsat pravidlem · zaznamenat</p>
   </div>
   <p class="note">
-    Práh, který nikdo nezměřil, je číslo, které se někomu líbilo. Každé pravidlo začalo jako
-    dotaz nad celou historií, stalo se výrazem a končí v manifestu každého běhu, který podle
-    něj jel — pravidlo se tak může změnit, aniž by loňský výstup zůstal nečitelný.
+    Každé pravidlo začalo jako dotaz nad celou historií, stalo se výrazem a končí
+    v manifestu každého běhu, který podle něj jel. Pravidlo se tak dá změnit, aniž by
+    starší výstup přestal být čitelný.
   </p>
 
   <div class="flow">
     <div class="step">
       <span class="n">změřit</span>
-      <span class="d">Zeptat se celé historie, jaký tvar problém má: kolik řádků, kolik peněz, které pole je to rozbité.</span>
+      <span class="d">Zjistit na celé historii, jaký tvar problém má: kolik řádků, kolik peněz, které pole je rozbité.</span>
     </div>
     <div class="arrow" aria-hidden="true">──▶</div>
     <div class="step">
@@ -198,12 +197,12 @@
   <div class="grid-2">
     <div class="card">
       <h3>Dvě závažnosti, ne jedna</h3>
-      <p class="cap">Chybějící sloupec a nevěrohodná hodnota jsou různé druhy události a mají různou odpověď.</p>
+      <p class="cap">Chybějící sloupec a nevěrohodná hodnota jsou různé události a mají různou odpověď.</p>
       <dl class="spec" id="spec-sev"></dl>
     </div>
     <div class="card">
       <h3>Kam jde odmítnutý řádek</h3>
-      <p class="cap">Nic se nemaže. Odpověď na „které řádky vypadly“ má být dotaz, ne vzpomínka.</p>
+      <p class="cap">Nic se nemaže. Které řádky vypadly, je dotaz nad Parquetem, ne dohledávání.</p>
       <dl class="spec" id="spec-keep"></dl>
     </div>
   </div>
@@ -228,32 +227,31 @@
     </div>
     <p class="note" style="margin-top:14px">
       Pravidla se počítají nezávisle — jeden řádek jich může porušit několik — takže součet
-      nedá počet řádků mimo výstup a čísla nezávisí na pořadí běhu. Dvě z devíti berou celý
-      řádek (jedno do karantény, jedno jako storno), jedno se jen počítá, zbylých šest
-      odmítne jedno pole a jízdu nechá.
+      nedá počet řádků mimo výstup a čísla nezávisí na pořadí. Dvě z devíti berou celý řádek
+      (jedno do karantény, jedno jako storno), jedno se jen počítá, zbylých šest odmítne
+      jedno pole a jízdu nechá.
     </p>
   </div>
 
   <div class="card">
     <h3>Proti čemu se běh posuzuje</h3>
-    <p class="cap">Brány, ne pravidla: tyhle nic nečistí, jen zabrání tomu, aby se špatný měsíc vůbec zveřejnil.</p>
+    <p class="cap">Brány, ne pravidla: nic nečistí, jen zabrání zveřejnění špatného měsíce.</p>
     <div class="plot" id="gates"></div>
     <p class="note" style="margin-top:14px">
-      Brána objemu ±40 % pochází z 29 změřených měsíců: největší skutečný skok +21,9 %
-      (2024-09), největší propad −13,5 % (2026-01). Prolomení brány běh rovnou shodí —
-      opakování by stáhlo tytéž bajty a došlo ke stejnému závěru.
+      Brána objemu ±40 % vychází z 29 změřených měsíců: největší skutečný skok +21,9 %
+      (2024-09), největší propad −13,5 % (2026-01). Prolomení brány běh shodí — opakování
+      by stáhlo tytéž bajty a skončilo stejně.
     </p>
   </div>
 </section>
 
 <section>
   <div class="sec-head">
-    <h2>Co tohle pořád ještě neumí</h2>
-    <p class="hint">známé, změřené, neopravené</p>
+    <h2>Známá omezení</h2>
+    <p class="hint">změřená, neopravená</p>
   </div>
   <p class="note">
-    Seznam, který by si čtenář jinak skládal z kódu. Každá položka je rozhodnutí, ne
-    přehlédnutí — přesto omezuje zveřejněná čísla.
+    Každá položka je rozhodnutí, ne přehlédnutí. Přesto omezuje zveřejněná čísla.
   </p>
 
   <div class="scroll">
@@ -262,27 +260,27 @@
       <tbody>
         <tr>
           <td class="wrap">Doby jízd přes změnu času jsou vedle o ±1 h</td>
-          <td class="dim wrap">Zdrojové časy nenesou offset. Dvě hodiny v roce jsou nejednoznačné a žádná rekonstrukce by nebyla poctivá.</td>
+          <td class="dim wrap">Zdrojové časy nenesou offset. Dvě hodiny v roce jsou nejednoznačné a rekonstrukce by byla dohad.</td>
         </tr>
         <tr>
           <td class="wrap">Stornovaný řádek přijde o svůj počet jízd</td>
-          <td class="dim wrap">Protizápis není jízda — započítat ho znamená počítat tu původní dvakrát — takže opouští <code>trips</code>. Objem se místo zmizení zveřejní jako <code>refunds_usd</code> a odečte v <code>net_revenue_usd</code>.</td>
+          <td class="dim wrap">Protizápis není jízda — započítat ho znamená počítat tu původní dvakrát — takže opouští <code>trips</code>. Objem se zveřejní jako <code>refunds_usd</code> a odečte v <code>net_revenue_usd</code>.</td>
         </tr>
         <tr>
           <td class="wrap">Storno bez původní jízdy stáhne den × zónu pod nulu</td>
-          <td class="dim wrap">Klíč na původní jízdu zdroj nenese, ale protizápis je její kopie: 82 % storn ledna 2025 má kladný řádek se shodným časem, zónami i vzdáleností a všech osm peněžních sloupců páru se sečte na nulu. Storno tedy padne na den a zónu původní jízdy. Zbylých 18 % je bez páru — jízda z prosince nebo nikdy nezveřejněná — a stáhne svůj den × zónu do minusu: ve 14 řádcích ze 7 290 je čistá tržba záporná, v 8 bez jediné jízdy. Proto zůstávají oba sloupce vedle čistého.</td>
+          <td class="dim wrap">Klíč na původní jízdu zdroj nenese, ale protizápis je její kopie: 82 % storn ledna 2025 má kladný řádek se shodným časem, zónami i vzdáleností a všech osm peněžních sloupců páru se sečte na nulu. Storno tedy padne na den a zónu původní jízdy. Zbylých 18 % je bez páru a stáhne svůj den × zónu do minusu: ve 14 řádcích ze 7 290 je čistá tržba záporná, v 8 z nich bez jediné jízdy. Proto zůstávají hrubá tržba i objem storn vedle čisté.</td>
         </tr>
         <tr>
           <td class="wrap">Přepočty se hlásí, ne hlídají branou</td>
-          <td class="dim wrap">Nikdo nezměřil, o kolik se přepočítaný měsíc smí legitimně pohnout. Práh by tady byl to jediné vymyšlené číslo v celém systému.</td>
+          <td class="dim wrap">Není změřené, o kolik se přepočítaný měsíc smí legitimně pohnout. Práh by tady byl jediné nezměřené číslo v systému.</td>
         </tr>
         <tr>
           <td class="wrap"><code>passenger_count</code> se nezveřejňuje</td>
-          <td class="dim wrap">NULL u 15,5 % řádků pod Flex Fare. Pravidla chrání zveřejňované metriky; zahodit 540 tisíc jízd kvůli nepublikovanému sloupci by byla ta skutečná chyba.</td>
+          <td class="dim wrap">NULL u 15,5 % řádků pod Flex Fare. Pravidla chrání zveřejňované metriky; zahodit 540 tisíc jízd kvůli nepublikovanému sloupci nedává smysl.</td>
         </tr>
         <tr>
           <td class="wrap">Medián na mapě je medián denních mediánů</td>
-          <td class="dim wrap">Mediány se přes partition nesčítají. Průměry se dopočítají z vážených čitatelů a jmenovatelů a jsou přesné; medián přes celou historii je aproximace a stránka to říká u něj.</td>
+          <td class="dim wrap">Mediány se přes partition nesčítají. Průměry se dopočítají z vážených čitatelů a jmenovatelů a jsou přesné; medián přes celou historii je aproximace a stránka to u něj uvádí.</td>
         </tr>
         <tr>
           <td class="wrap">Surové bajty se přepisují, neverzují</td>
@@ -301,14 +299,14 @@
   <div class="crosslink">
     <p class="t">
       <b>Čísla samotná</b> — 263 zón na mapě, osm metrik, denní řady po měsících a průměr
-      vedle mediánu, proti kterému se má číst.
+      vedle mediánu.
     </p>
     <a href="index.html">◂ Data</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Jestli dnešní běh vyšel</b> — řádek na manifest, co který běh odmítl, proti
-      kterému ETagu a jak plán pozná, že je co dělat.
+      <b>Jestli dnešní běh vyšel</b> — řádek na manifest, co který běh odmítl a proti
+      kterému ETagu.
     </p>
     <a href="pipeline.html">Pipeline a běhy ▸</a>
   </div>
@@ -317,8 +315,8 @@
 <footer>
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
-    Argumenty jsou pevný text; každý počet, práh a podíl se čte z manifestů běhů. Kde se
-    číslo změřilo jednou nad celou historií, věta říká, na kterém měsíci.
+    Text je pevný, každý počet, práh a podíl se čte z manifestů běhů. Kde se číslo měřilo
+    jednou nad celou historií, věta uvádí, na kterém měsíci.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

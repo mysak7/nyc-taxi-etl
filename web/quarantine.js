@@ -229,7 +229,7 @@ function buildTilesFor(m, run) {
   ]);
 
   document.getElementById("kpis-cap").textContent = MONTHS.length > 1
-    ? label(m) + " — vybraný měsíc. Přepnete ho kliknutím na sloupec grafu, na řádek"
+    ? label(m) + " — vybraný měsíc. Přepíná se kliknutím na sloupec grafu, na řádek"
       + " tabulky níž, nebo přepínačem u rozpisu. Součet za celé období (" + SPAN + ")"
       + " je v řádku „celkem“ v tabulce."
     : "Jediná zpracovaná partition " + SPAN + ".";
@@ -285,7 +285,7 @@ function buildHeader() {
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 
   document.getElementById("stack-cap").textContent =
-    "Podíl řádků mimo výstup na zdrojových, " + SPAN + ". Kliknutím na sloupec se níž načte rozpis toho měsíce.";
+    "Podíl řádků mimo výstup na zdrojových řádcích, " + SPAN + ". Kliknutím na sloupec se níž načte rozpis toho měsíce.";
 
   document.getElementById("stack-legend").innerHTML = STACK_ORDER.map(
     (name) => `<span><i class="swatch" style="background:${STACK_FILL[name]}"></i>${ruleLabel(name, APPLIED)}</span>`
@@ -329,8 +329,8 @@ function render() {
   }).join("");
 
   document.getElementById("rules-cap").textContent =
-    label(m) + " — " + nf.format(run.rows.input) + " posouzených zdrojových řádků. Počítá se"
-    + " nezávisle: jeden řádek může porušit několik pravidel naráz.";
+    label(m) + " — " + nf.format(run.rows.input) + " posouzených zdrojových řádků. Pravidla se"
+    + " počítají nezávisle: jeden řádek může porušit několik naráz.";
 
   // Kolik řádků porušilo obě pravidla na celý řádek zároveň. Manifest to přímo nenese,
   // ale plyne to z rozdílu: součet dotčených minus ti, co doopravdy z výstupu vypadli.
@@ -341,11 +341,11 @@ function render() {
     ? `Pravidla na celý řádek se dotkla ${nf.format(flagged)} řádků, z výstupu jich vypadlo `
       + `${nf.format(removed)}: ${plural(overlap, "řádek", "řádky", "řádků")} porušil`
       + `${overlap === 1 ? "" : "y"} obě naráz a počítá se jednou. Štítek `
-      + `<code>reject_reason</code> takový řádek dostane podle pořadí pravidel, od nejvzácnějšího `
-      + `— stornovaná jízda z jiného měsíce je tedy <em>mimo měsíc</em>, a do storn tohohle `
+      + `<code>reject_reason</code> se přiděluje podle pořadí pravidel, od nejvzácnějšího: `
+      + `stornovaná jízda z jiného měsíce je tedy <em>mimo měsíc</em> a do storn tohohle `
       + `měsíce se nezapočítá.`
     : `Pravidla na celý řádek se dotkla ${nf.format(flagged)} řádků a přesně tolik jich `
-      + `z výstupu vypadlo — v tomhle měsíci žádný řádek neporušil obě naráz.`;
+      + `z výstupu vypadlo: v tomhle měsíci neporušil žádný řádek obě naráz.`;
 }
 
 buildHeader();

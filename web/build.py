@@ -159,9 +159,9 @@ PAGES = {
     # místo jednoho běhu -- proto tytéž klíče a žádná mapa ani denní řady.
     "method.html": (
         "method",
-        "Kvalita dat NYC Taxi: polemika",
-        "Proč zveřejněná čísla vypadají, jak vypadají: co by stála snadná odpověď, které"
-        " prahy se změřily a co výstup pořád ještě neumí.",
+        "Metodika a kvalita dat NYC Taxi",
+        "Proč zveřejněná čísla vypadají, jak vypadají: co by stála jednodušší varianta,"
+        " jak se změřily prahy a jaká omezení výstup nese.",
         ("key", "year", "month", "rows", "trips", "runs"),
     ),
     "pipeline.html": (
