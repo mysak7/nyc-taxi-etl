@@ -1,13 +1,13 @@
 <header>
   <p class="eyebrow" id="src"></p>
-  <h1>Pipeline a běhy</h1>
+  <h1>Většinu dní se nestane nic</h1>
   <p class="lead">
-    Provozní strana téhož datasetu: co pipeline v daný den zpracovala, které řádky odmítla
-    a proti kterým prahům. Každý údaj pochází z manifestu zapsaného vedle výstupu.
+    A tak to má být: zdroj publikuje po měsících, takže denní běh nejčastěji porovná ETagy
+    a jde zase spát. Co se doopravdy stalo, je níž — z manifestů zapsaných vedle výstupu.
   </p>
   <p class="lead">
-    Kontrola čerstvosti běží i ve dnech, kdy není co zpracovat: zelený běh, který tiše
-    nezpracoval nic, jinak vypadá stejně jako běh v pořádku.
+    Proto tu běží i kontrola čerstvosti: běh, který tiše nezpracoval nic, vypadá zvenčí
+    stejně zeleně jako běh v pořádku.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -18,13 +18,13 @@
 
 <section>
   <div class="sec-head">
-    <h2>Pipeline</h2>
+    <h2>Jak to jezdí</h2>
     <p class="hint">denní plán · práci určuje ETag</p>
   </div>
   <p class="note">
     Zdroj publikuje po měsících se zpožděním 26–85 dní a <strong>přepisuje soubory
     zpětně</strong> — 25. 3. 2026 nahradil prosinec, leden i únor v jednom devítiminutovém
-    okně. Denní běh proto nezpracovává „včerejšek“: pošle šest HTTP HEAD, porovná ETagy
+    okně. Denní běh proto neřeší „včerejšek“: pošle šest HTTP HEAD, porovná ETagy
     s uloženými a většinou nemá co dělat.
   </p>
 
@@ -60,8 +60,8 @@
   </div>
 
   <div class="card">
-    <h3>Co se stane, když běh selže</h3>
-    <p class="cap">Tři selhání vypadají zvenčí stejně, jako červená úloha. Opakovat má smysl jen jedno z nich.</p>
+    <h3>Když to spadne</h3>
+    <p class="cap">Tři selhání, zvenčí jedna červená úloha. Opakovat má smysl jen jedno z nich.</p>
     <div class="scroll">
       <table>
         <thead><tr><th>Chyba</th><th>Příčina</th><th>Chování</th></tr></thead>
@@ -99,9 +99,9 @@
   </div>
   <p class="note">
     Jeden řádek je jeden manifest <code>_runs/&lt;run_id&gt;.json</code> vedle výstupu. Píše se
-    až po úspěšném zápisu, takže tabulka obsahuje jen běhy, které doběhly; neúspěšná spuštění
-    jsou v historii Step Functions. Partition se přepisují, manifesty přibývají — kolikrát se
-    měsíc přepočítal a proti kterému ETagu, je tedy vidět z jejich výpisu.
+    až po úspěšném zápisu, takže tabulka zná jen běhy, které doběhly; zbytek je v historii
+    Step Functions. Partition se přepisují, manifesty přibývají — kolikrát se měsíc přepočítal
+    a proti kterému ETagu, je proto vidět z jejich výpisu.
   </p>
   <div class="scroll">
     <table class="runs">
@@ -167,15 +167,15 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>Výstup samotný</b> — 263 zón na mapě, osm metrik, denní řady po měsících a průměr
-      vedle mediánu.
+      <b>Samotná čísla</b> — 263 zón na mapě, osm metrik, denní řady a průměr vedle
+      mediánu.
     </p>
     <a href="index.html">◂ Data</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Proč jsou pravidla taková</b> — proti čemu se každý práh měřil, co by stála
-      jednodušší varianta a jaká omezení výstup nese.
+      <b>Kudy vedla zkratka</b> — proti čemu se každý práh měřil, co by ušetřila jednodušší
+      varianta a kde má výstup hranice.
     </p>
     <a href="method.html">Metodika a kvalita dat ▸</a>
   </div>
@@ -185,8 +185,8 @@
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
     Postaveno z vrstvy curated na S3 a naservírováno staticky: celá historie jsou jednotky
-    megabajtů, takže se vejde do prohlížeče a backend není potřeba. Neúspěšné běhy manifest
-    nemají, jsou v historii Step Functions.
+    megabajtů, vejde se do prohlížeče a backend není potřeba. Běh, který spadl, manifest
+    nemá — hledá se v historii Step Functions.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

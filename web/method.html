@@ -1,13 +1,13 @@
 <header>
   <p class="eyebrow" id="src"></p>
-  <h1>Metodika a kvalita dat</h1>
+  <h1>Kudy vedla zkratka</h1>
   <p class="lead">
-    U každého čísla na datové stránce existovala i jednodušší varianta zpracování. Níž je
-    u šesti rozhodnutí ta jednodušší cesta, co by stála a co místo ní dělá pipeline.
+    U každého čísla na datové stránce stála vedle i jednodušší cesta. Šestkrát se po ní
+    nešlo — níž je co by ušetřila, co by stála a co se dělá místo toho.
   </p>
   <p class="lead">
-    Prahy nejsou odhadnuté: každý je změřený na celé historii a zapsaný v manifestu běhu,
-    který podle něj jel. Starší číslo se tak dá číst proti pravidlu, které ho vyrobilo.
+    Žádný práh tu není od oka: každý je změřený na celé historii a zapsaný v manifestu běhu,
+    který podle něj jel. Staré číslo se tak dá číst proti pravidlu, které ho vyrobilo.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -22,12 +22,12 @@
     <p class="hint">každé změřené na celé historii</p>
   </div>
   <p class="note">
-    Zdroj je veřejný výpis toho, co nahlásily taxametry a terminály. Jsou v něm jízdy na
+    Zdroj je veřejný výpis toho, co nahlásily taxametry a terminály: jsou v něm jízdy na
     276 423 mil, jízdy končící dřív, než začnou, a záporné jízdné. Níž je, co se s tím dělá.
   </p>
 
   <div class="card arg">
-    <h3>Rozbitá hodnota — zahodit celou jízdu?</h3>
+    <h3>Jedna rozbitá hodnota — vyhodit celou jízdu?</h3>
     <div class="case">
       <div class="side">
         <span class="l">Snadná varianta</span>
@@ -54,7 +54,7 @@
   </div>
 
   <div class="card arg">
-    <h3>Publikovat průměr, nebo i medián?</h3>
+    <h3>Stačí průměr, nebo k němu patří medián?</h3>
     <div class="case">
       <div class="side">
         <span class="l">Snadná varianta</span>
@@ -144,7 +144,7 @@
   </div>
 
   <div class="card arg">
-    <h3>Říká tohle, kolik New Yorčané utratí za taxi?</h3>
+    <h3>Je tohle „kolik se v New Yorku utratí za taxi“?</h3>
     <div class="case">
       <div class="side">
         <span class="l">Snadná varianta</span>
@@ -172,9 +172,9 @@
     <p class="hint">změřit · zapsat pravidlem · zaznamenat</p>
   </div>
   <p class="note">
-    Každé pravidlo začalo jako dotaz nad celou historií, stalo se výrazem a končí
-    v manifestu každého běhu, který podle něj jel. Pravidlo se tak dá změnit, aniž by
-    starší výstup přestal být čitelný.
+    Každé pravidlo začalo jako dotaz nad celou historií, stalo se výrazem a skončilo
+    v manifestu každého běhu, který podle něj jel. Pravidlo jde proto změnit, aniž by starší
+    výstup přestal dávat smysl.
   </p>
 
   <div class="flow">
@@ -250,9 +250,7 @@
     <h2>Známá omezení</h2>
     <p class="hint">změřená, neopravená</p>
   </div>
-  <p class="note">
-    Každá položka je rozhodnutí, ne přehlédnutí. Přesto omezuje zveřejněná čísla.
-  </p>
+  <p class="note">Nic z toho není přehlédnutí. Přesto to zveřejněná čísla omezuje.</p>
 
   <div class="scroll">
     <table>
@@ -298,15 +296,15 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>Čísla samotná</b> — 263 zón na mapě, osm metrik, denní řady po měsících a průměr
-      vedle mediánu.
+      <b>Samotná čísla</b> — 263 zón na mapě, osm metrik, denní řady a průměr vedle
+      mediánu.
     </p>
     <a href="index.html">◂ Data</a>
   </div>
   <div class="crosslink">
     <p class="t">
-      <b>Jestli dnešní běh vyšel</b> — řádek na manifest, co který běh odmítl a proti
-      kterému ETagu.
+      <b>Jestli dnešek vyšel</b> — řádek na manifest, co který běh odmítl a proti kterému
+      ETagu.
     </p>
     <a href="pipeline.html">Pipeline a běhy ▸</a>
   </div>
@@ -315,8 +313,8 @@
 <footer>
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
-    Text je pevný, každý počet, práh a podíl se čte z manifestů běhů. Kde se číslo měřilo
-    jednou nad celou historií, věta uvádí, na kterém měsíci.
+    Text je pevný, čísla ne: každý počet, práh a podíl se čte z manifestů běhů. Kde se
+    měřilo jednorázově nad celou historií, věta říká na kterém měsíci.
   </p>
   <p class="hint" id="foot"></p>
 </footer>

@@ -603,9 +603,9 @@ function drawZones(m) {
     .sort((a, b) => spec.value(aggs[b]) - spec.value(aggs[a]))
     .slice(0, 10);
 
-  document.getElementById("zones-title").textContent = "Zóny podle: " + spec.label;
+  document.getElementById("zones-title").textContent = "Žebříček zón · " + spec.label;
   document.getElementById("zones-cap").textContent = spec.additive
-    ? "Deset nejsilnějších zón nástupu " + inLabel(m) + ", podle zveřejněných jízd."
+    ? "Deset nejvytíženějších zón nástupu " + inLabel(m) + ", podle zveřejněných jízd."
     : "Za " + lowerLabel(m) + ", jen zóny s aspoň 0,1 % jízd měsíce (≥ " + nf.format(floor)
       + "). Přísnější práh než mapa: pořadí vybírá extrémy, a ty vyhraje zóna se stovkou jízd.";
 

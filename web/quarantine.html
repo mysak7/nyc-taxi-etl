@@ -1,17 +1,16 @@
 <header>
   <p class="eyebrow" id="src"></p>
-  <h1>Co se ve výstupu nepočítá</h1>
+  <h1>Co propadlo sítem</h1>
   <p class="lead">
-    Ne všechno, co z výstupu vypadne, je vada. Tady je měsíc po měsíci, co se nepočítá
-    a proč, podle manifestu posledního běhu nad tou partition.
+    Ne všechno, co z výstupu vypadne, je vada. Měsíc po měsíci, co se nepočítá a proč —
+    podle manifestu posledního běhu nad tou partition.
   </p>
   <p class="lead">
-    Způsoby jsou tři. <strong>Karanténa</strong> znamená nedůvěryhodný řádek — v praxi jízdy
-    mimo zpracovávaný měsíc. <strong>Storno</strong> je záporný protizápis k odjeté jízdě:
-    jízdou se nepočítá, aby se ta původní nezapočítala dvakrát, ale peníze zůstávají — jdou
-    do <code>refunds_usd</code> a odečtou se od hrubé tržby. <strong>Vynulování</strong>
-    zahodí jednu hodnotu: řádek, jízda i peníze zůstávají, jen se ta hodnota nepočítá do
-    svého průměru.
+    Síta jsou tři. <strong>Karanténa</strong> je nedůvěryhodný řádek, v praxi jízda mimo
+    zpracovávaný měsíc. <strong>Storno</strong> je záporný protizápis k odjeté jízdě: jízdou
+    se nepočítá, aby se ta původní nepočítala dvakrát, ale peníze zůstávají — jdou do
+    <code>refunds_usd</code> a odečtou se od hrubé tržby. <strong>Vynulování</strong> bere
+    jedinou hodnotu: řádek, jízda i peníze zůstávají, jen ta hodnota nejde do svého průměru.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -29,8 +28,8 @@
   <p class="note">
     Sloupec je měsíc, výška podíl řádků mimo výstup. Každá kategorie má vlastní práh —
     karanténa <strong id="reject-limit"></strong>, storna <strong id="reversal-limit"></strong> —
-    a překročení kteréhokoli z nich měsíc nezveřejní. Společný práh by vlnu reklamací
-    u dodavatele vykázal jako rozbitá data.
+    a překročení kteréhokoli z nich měsíc nezveřejní. Jeden společný práh by z vlny reklamací
+    u dodavatele udělal „rozbitá data“.
   </p>
   <div class="card">
     <h3>Podíl řádků mimo výstup</h3>
@@ -47,9 +46,9 @@
   </div>
   <p class="note">
     Vlevo řádky, které <strong>z výstupu vypadly</strong> (leží v Parquetu vyřazených, každý
-    se svým důvodem), vpravo <strong>vynulovaná pole</strong> (řádek zůstává, ztrácí jedno
-    měření). Řádek může porušit karanténní i stornovací pravidlo naráz; pak se počítá jednou,
-    podle vzácnějšího z nich.
+    se svým důvodem), vpravo <strong>vynulovaná pole</strong> (řádek zůstává, přijde o jedno
+    měření). Když řádek poruší karanténní i stornovací pravidlo naráz, počítá se jednou —
+    podle toho vzácnějšího.
   </p>
   <div class="scroll">
     <table class="runs" id="ledger-table">
@@ -118,8 +117,8 @@
 
 <section>
   <div class="card">
-    <h3>Kde ty řádky leží</h3>
-    <p class="cap">Nic se nemaže. Vyřazený řádek se zapisuje celý, včetně důvodu.</p>
+    <h3>Kam se poděly</h3>
+    <p class="cap">Nic se nemaže. Vyřazený řádek se zapíše celý, i s důvodem.</p>
     <dl class="spec" id="spec-keep"></dl>
     <p class="note">
       Stránka se staví <strong>jen z manifestů ve vrstvě curated</strong>: role, která ji
@@ -147,8 +146,8 @@
 <section>
   <div class="crosslink">
     <p class="t">
-      <b>Proč jsou pravidla taková</b> — proti čemu se každý práh měřil a co by stálo
-      zahazování celých řádků.
+      <b>Kudy vedla zkratka</b> — proti čemu se každý práh měřil a co by stálo zahazování
+      celých řádků.
     </p>
     <a href="method.html">◂ Metodika</a>
   </div>
@@ -164,7 +163,7 @@
   <p class="eyebrow">O téhle stránce</p>
   <p class="note">
     Počítáno z nejnovějšího manifestu každé partition. Starší popisují data, která už
-    v curated nejsou; jejich součet by karanténu nafoukl o přepočty téhož měsíce.
+    v curated nejsou — sečíst je by karanténu nafouklo o přepočty téhož měsíce.
   </p>
   <p class="hint" id="foot"></p>
 </footer>
