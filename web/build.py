@@ -235,6 +235,24 @@ def backfill_reversals(run: dict) -> dict:
     return run
 
 
+CHECK_LIMIT = 14
+
+
+def read_checks(layout: storage.Layout) -> dict:
+    """Posledních pár kontrol, nejnovější první, plus kolik jich celkem je.
+
+    Jméno souboru začíná časovým razítkem, takže poslední se dají vybrat z výpisu a
+    stahovat celou historii kvůli čtrnácti řádkům není potřeba. Kontroly přibývají denně,
+    manifesty jen při změně dat -- proto je limit vlastní, ne sdílený s běhy.
+    """
+    names = [name for name in storage.list_names(layout.checks_dir()) if name.endswith(".json")]
+    recent = [
+        storage.read_json(storage.join(layout.checks_dir(), name))
+        for name in reversed(names[-CHECK_LIMIT:])
+    ]
+    return {"total": len(names), "recent": recent}
+
+
 def read_runs(layout: storage.Layout, year: int, month: int) -> list[dict]:
     """Manifesty partition, nejnovější první. Append-only: partition se přepisuje,
     manifesty přibývají."""
@@ -399,7 +417,8 @@ def build() -> list[pathlib.Path]:
     for payload, sums in built:
         payload["zones"] = zone_columns(sums, index)
 
-    # Co je na obou stránkách: odkud data jsou, kdy se to postavilo, jak čerstvý je zdroj.
+    # Co je na všech stránkách: odkud data jsou, kdy se to postavilo, jak čerstvý je
+    # zdroj a kdy se na něj pipeline naposledy ptala.
     # Bez URI curated -- jméno bucketu nese číslo AWS účtu a stránky jsou veřejné.
     common = {
         "dataset": "yellow",
@@ -409,7 +428,10 @@ def build() -> list[pathlib.Path]:
             "region": os.environ.get("AWS_REGION", "eu-central-1"),
         },
         "config": {key: getattr(cfg, key) for key in CONFIG_KEYS},
-        "freshness": pipeline.check_freshness(cfg),
+        # `record=False`: build se ptá na totéž co běh, ale nic nespouští a role
+        # stránky curated jen čte. Zápis kontroly patří pipeline, ne generátoru HTML.
+        "freshness": pipeline.check_freshness(cfg, record=False),
+        "checks": read_checks(layout),
     }
 
     style = (HERE / "style.css").read_text()

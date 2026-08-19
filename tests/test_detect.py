@@ -120,6 +120,49 @@ def test_zeleny_dag_nelze_kdyz_zdroj_ma_data_ktera_nemame(cfg, published):
         pipeline.check_freshness(cfg)
 
 
+def test_kontrola_se_zapise_i_v_den_bez_prace(cfg, published, monkeypatch):
+    """Den, kdy zdroj nic nevydal, po sobě nenechá manifest -- kdyby nenechal ani záznam
+    o kontrole, nešel by zvenčí odlišit od dne, kdy se pipeline vůbec nespustila."""
+    monkeypatch.setattr(pipeline, "window", lambda cfg, today=None: [(2026, 5), (2026, 4)])
+    published[(2026, 5)] = "etag-a"
+    store(cfg, 2026, 5, "etag-a")
+
+    pipeline.check_freshness(cfg, trigger="lambda")
+
+    checks = storage.list_names(pipeline.layout(cfg).checks_dir())
+    assert len(checks) == 1
+    record = storage.read_json(storage.join(pipeline.layout(cfg).checks_dir(), checks[0]))
+    assert record["status"] == "ok"
+    assert record["trigger"] == "lambda"
+    assert record["changed"] == []  # nic se nezměnilo, a přesto se kontrolovalo
+    assert record["checked"] == ["2026-05", "2026-04"]
+    assert record["source_newest"] == "2026-05"
+
+
+def test_kontrola_se_zapise_i_kdyz_spadne(cfg, published):
+    """Že kontrola proběhla a co našla, je informace i (hlavně) u červeného běhu."""
+    published[(2026, 5)] = "etag-a"
+
+    with pytest.raises(DataQualityError):
+        pipeline.check_freshness(cfg)
+
+    checks = storage.list_names(pipeline.layout(cfg).checks_dir())
+    record = storage.read_json(storage.join(pipeline.layout(cfg).checks_dir(), checks[0]))
+    assert record["status"] == "failed"
+    assert "bez výstupu" in record["detail"]
+
+
+def test_ctenar_curated_kontrolu_nezapisuje(cfg, published, monkeypatch):
+    """Build stránky se ptá na totéž co běh, ale nic nespouští -- a do bucketu nesmí psát."""
+    monkeypatch.setattr(pipeline, "window", lambda cfg, today=None: [(2026, 5)])
+    published[(2026, 5)] = "etag-a"
+    store(cfg, 2026, 5, "etag-a")
+
+    pipeline.check_freshness(cfg, record=False)
+
+    assert storage.list_names(pipeline.layout(cfg).checks_dir()) == []
+
+
 def test_zastaraly_zdroj_shodi_beh(cfg, published, monkeypatch):
     monkeypatch.setattr(pipeline, "window", lambda cfg, today=None: [(2020, 1)])
     published[(2020, 1)] = "etag-a"

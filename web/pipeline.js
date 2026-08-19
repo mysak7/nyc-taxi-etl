@@ -34,6 +34,61 @@ function drawFunnel(host, m) {
   host.appendChild(svg);
 }
 
+/* ---------- kontroly ---------- */
+
+/* Kontrola je jediné místo, kde stránka mluví o čase běhu, ne o měsíci dat. Absolutní
+   razítko je v UTC (v tom běží scheduler i manifesty), relativní odstup se počítá až
+   v prohlížeči -- stránka se staví jednou denně a "před 6 h" zapečené do HTML by po
+   půl dni lhalo. */
+const CHECKS = (DATA.checks && DATA.checks.recent) || [];
+const LAST_CHECK = CHECKS[0];
+
+const checkStamp = (iso) => iso.slice(0, 16).replace("T", " ");
+const hoursSince = (iso) => (Date.now() - Date.parse(iso)) / 36e5;
+
+function checkAgo(iso) {
+  const h = hoursSince(iso);
+  if (h < 1.5) return "před chvílí";
+  if (h < 48) return "před " + Math.round(h) + " h";
+  return "před " + plural(Math.round(h / 24), "dnem", "dny", "dny");
+}
+
+/* Plán je denní, takže dvě zmeškaná okna jsou první věc, která se dá poznat zvenčí --
+   dřív ne: běh po půlnoci UTC a stránka postavená v 4:30 spolu žijí v jednom dni. */
+const checkStale = (iso) => hoursSince(iso) > 48;
+
+function buildChecks() {
+  const host = document.getElementById("checks");
+  const more = document.getElementById("checks-more");
+  const cadence = document.getElementById("checks-cadence");
+
+  if (!LAST_CHECK) {
+    // Prázdno není chyba: curated může být starší než tenhle záznam, nebo se od nasazení
+    // ještě neběželo. Ať to stránka řekne rovnou, místo prázdné tabulky.
+    host.innerHTML = '<tr><td colspan="6" class="dim">Zatím žádný záznam — první přibude po nejbližším běhu.</td></tr>';
+    more.textContent = "";
+    cadence.textContent = "denní plán";
+    return;
+  }
+
+  cadence.textContent = "denní plán · poslední " + checkAgo(LAST_CHECK.checked_at);
+
+  host.innerHTML = CHECKS.map((c) => `
+    <tr>
+      <td class="mono">${checkStamp(c.checked_at)} UTC</td>
+      <td><span class="tag">${c.trigger}</span></td>
+      <td class="num">${c.checked.length}</td>
+      <td class="mono">${c.source_newest || "—"}${c.source_age_days == null ? "" : ` <span class="dim">(${plural(c.source_age_days, "den", "dny", "dní")})</span>`}</td>
+      <td class="wrap">${c.changed.length ? c.changed.map((m) => `<span class="tag">${m}</span>`).join(" ") : '<span class="dim">beze změny</span>'}</td>
+      <td class="${c.status === "ok" ? "" : "wrap"}">${c.status === "ok" ? "ok" : `<b class="fail">${c.detail || "selhalo"}</b>`}</td>
+    </tr>`).join("");
+
+  const total = DATA.checks.total;
+  more.textContent = total > CHECKS.length
+    ? "zobrazeno " + CHECKS.length + " nejnovějších z " + plural(total, "kontroly", "kontrol", "kontrol")
+    : plural(total, "kontrola", "kontroly", "kontrol");
+}
+
 /* ---------- statické části ---------- */
 
 function specRows(hostId, rows) {
@@ -45,6 +100,14 @@ function buildHeader() {
 
   const f = DATA.freshness;
   buildChips([
+    LAST_CHECK
+      ? {
+          dot: checkStale(LAST_CHECK.checked_at) ? "warn" : "good",
+          text: "zdroj zkontrolován " + checkAgo(LAST_CHECK.checked_at) + " ("
+            + checkStamp(LAST_CHECK.checked_at) + " UTC) · "
+            + (LAST_CHECK.changed.length ? LAST_CHECK.changed.join(", ") : "beze změny"),
+        }
+      : { dot: "info", text: "zdroj zatím nezkontrolován — první záznam přibude po nejbližším běhu" },
     { dot: "good", text: "mezera v příjmu dat: žádná" },
     { dot: "good", text: "zdroj publikoval " + f.source_newest + ", před " + f.source_age_days + " dny (práh " + CFG.source_stale_days + ")" },
     { dot: "info", text: plural(MONTHS.length, "partition") + " · postaveno " + DATA.generated_at },
@@ -156,6 +219,7 @@ function render() {
 }
 
 buildHeader();
+buildChecks();
 buildRuns();
 buildPicker();
 render();

@@ -145,8 +145,11 @@ class Layout:
     curated_uri: str
     rejects_uri: str
 
+    def _dataset(self, base: str) -> str:
+        return join(base, "dataset=yellow")
+
     def _partition(self, base: str, year: int, month: int) -> str:
-        return join(base, "dataset=yellow", f"year={year:04d}", f"month={month:02d}")
+        return join(self._dataset(base), f"year={year:04d}", f"month={month:02d}")
 
     def raw_file(self, year: int, month: int) -> str:
         return join(
@@ -167,3 +170,11 @@ class Layout:
 
     def run_file(self, year: int, month: int, run_id: str) -> str:
         return join(self.runs_dir(year, month), f"{run_id}.json")
+
+    def checks_dir(self) -> str:
+        """Kontroly nepatří pod žádný měsíc -- běh se ptá na celé okno naráz. Leží proto
+        o úroveň výš než partition, vedle nich."""
+        return join(self._dataset(self.curated_uri), "_checks")
+
+    def check_file(self, check_id: str) -> str:
+        return join(self.checks_dir(), f"{check_id}.json")

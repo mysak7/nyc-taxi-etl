@@ -3,7 +3,8 @@
   <h1>Pipeline a běhy</h1>
   <p class="lead">
     Zdroj publikuje po měsících, denní běh proto většinou jen porovná ETagy a nemá co
-    zpracovat. Co který běh udělal, je níž — z manifestů zapsaných vedle výstupu.
+    zpracovat. Že se ptal, je vidět v kontrolách; co udělal, když práci našel, v manifestech
+    zapsaných vedle výstupu.
   </p>
   <div class="status" id="status"></div>
 </header>
@@ -84,6 +85,34 @@
       data počítaná čtyřikrát.
     </p>
   </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>Kontroly</h2>
+    <p class="hint" id="checks-cadence"></p>
+  </div>
+  <p class="note">
+    Konec každé exekuce zapíše záznam <code>_checks/&lt;check_id&gt;.json</code> — i toho běhu,
+    který nenašel žádnou změnu. Řádek bez změněných měsíců proto neznamená, že se nic nedělo:
+    znamená, že se zdroje někdo ptal a ETagy seděly.
+  </p>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Kontrola</th>
+          <th>Spouštěč</th>
+          <th class="num">Měsíců v okně</th>
+          <th>Nejnovější u zdroje</th>
+          <th>Změněné měsíce</th>
+          <th>Výsledek</th>
+        </tr>
+      </thead>
+      <tbody id="checks"></tbody>
+    </table>
+  </div>
+  <p class="hint" id="checks-more"></p>
 </section>
 
 <section>

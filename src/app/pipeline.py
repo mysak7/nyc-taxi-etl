@@ -89,27 +89,72 @@ def detect(cfg: Config, months: list[tuple[int, int]] | None = None, force: bool
     newest = max(published) if published else None  # páry se řadí chronologicky
     return {
         "months": work,
+        # Co se ptalo, ne jen co z toho vypadlo: den bez práce je taky výsledek a bez
+        # tohohle seznamu by se nedal odlišit od dne, kdy se pipeline vůbec nespustila.
+        "checked": [label(year, month) for year, month in candidates],
         "source_newest": label(*newest) if newest else None,
         "source_age_days": _age_days(*newest) if newest else None,
         "ingest_gap": gaps,
     }
 
 
-def check_freshness(cfg: Config) -> dict:
+def check_freshness(cfg: Config, trigger: str = "cli", record: bool = True) -> dict:
     """Zelený DAG nesmí lhát. Dvě různá selhání, dvě různá tvrzení: publikovaný měsíc bez
-    výstupu (naše chyba, bez časového prahu) a zdroj, který přestal publikovat."""
+    výstupu (naše chyba, bez časového prahu) a zdroj, který přestal publikovat.
+
+    Běží na konci každé exekuce, i té bez práce -- proto se tady zapisuje i záznam
+    o kontrole. `record=False` je pro čtenáře curated (build stránky), který se ptá na
+    totéž, ale nic nespouští a do bucketu nesmí psát."""
     state = detect(cfg)
+    problem = _freshness_problem(cfg, state)
+    if record:
+        _write_check(cfg, state, trigger, problem)
+    if problem:
+        raise DataQualityError(problem)
+    log("freshness_ok", **state)
+    return state
+
+
+def _freshness_problem(cfg: Config, state: dict) -> str | None:
     if state["ingest_gap"]:
-        raise DataQualityError(f"publikované měsíce bez výstupu: {state['ingest_gap']}")
+        return f"publikované měsíce bez výstupu: {state['ingest_gap']}"
     if state["source_newest"] is None:
-        raise DataQualityError("v okně není žádný publikovaný měsíc -- změnilo se URL schéma?")
+        return "v okně není žádný publikovaný měsíc -- změnilo se URL schéma?"
     if state["source_age_days"] > cfg.source_stale_days:
-        raise DataQualityError(
+        return (
             f"nejnovější data jsou {state['source_newest']} ({state['source_age_days']} dní);"
             f" práh je {cfg.source_stale_days}"
         )
-    log("freshness_ok", **state)
-    return state
+    return None
+
+
+def _write_check(cfg: Config, state: dict, trigger: str, problem: str | None) -> None:
+    """Den bez nových dat po sobě nenechá manifest, a přesto se běželo: zdroj publikuje
+    po měsících, takže většina běhů jen porovná ETagy. Bez tohohle záznamu vypadá takový
+    den z curated stejně jako den, kdy scheduler neodpálil nic -- stránka by uměla říct
+    jen „poslední data jsou z ledna", ne „ptali jsme se dnes ráno".
+
+    Zapisuje se i k selhání, ještě před vyhozením výjimky: že kontrola proběhla a co
+    našla, je informace i (hlavně) když skončila červeně."""
+    check_id = new_run_id()  # tentýž tvar jako run_id: řaditelné razítko + token
+    document = {
+        "schema_version": 1,
+        "check_id": check_id,
+        "checked_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "trigger": trigger,
+        "app_version": VERSION,
+        "git_sha": os.environ.get("GIT_SHA"),  # ARG GIT_SHA v Dockerfile
+        "dataset": "yellow",
+        "checked": state["checked"],
+        "changed": [label(month["year"], month["month"]) for month in state["months"]],
+        "source_newest": state["source_newest"],
+        "source_age_days": state["source_age_days"],
+        "ingest_gap": state["ingest_gap"],
+        "status": "failed" if problem else "ok",
+        "detail": problem,
+    }
+    storage.write_json(layout(cfg).check_file(check_id), document)
+    log("check_recorded", check_id=check_id, status=document["status"], changed=document["changed"])
 
 
 def run_month(

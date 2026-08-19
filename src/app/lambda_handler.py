@@ -40,7 +40,7 @@ def handler(event: dict, context=None) -> dict:
             force=bool(event.get("force", False)),
         )
     if command == "check-freshness":
-        return pipeline.check_freshness(cfg)
+        return pipeline.check_freshness(cfg, trigger="lambda")
     raise ValueError(f"neznámý příkaz: {command}")
 
 

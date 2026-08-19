@@ -4,7 +4,7 @@
    grafy a to, co je na stránce vidět, patří do `data.js` / `pipeline.js` / `method.js`.
 
    Všechny stránky čtou týž tvar payloadu (`dataset`, `generated_at`, `source`, `config`,
-   `freshness`, `months`), jen s jinými poli v `months` -- build každé stránce zapeče
+   `freshness`, `checks`, `months`), jen s jinými poli v `months` -- build každé stránce zapeče
    jen to, co doopravdy kreslí. Proto tenhle soubor nesmí sáhnout na nic, co má jen
    některá z nich. */
 

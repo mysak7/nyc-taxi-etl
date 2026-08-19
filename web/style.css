@@ -21,6 +21,7 @@
   --band: rgba(11, 11, 11, 0.035);
   --hover: rgba(11, 11, 11, 0.04);
   --good: #0ca30c;
+  --bad: #c62828;
   --shadow: 0 1px 2px rgba(11, 11, 11, 0.05);
   /* Sekvenční rampy mapy: jeden odstín, šest kroků, jedna rampa na skupinu metrik
      (součty modře, průměry zeleně, poměry fialově). Rampa se nikdy nemíchá s jinou --
@@ -52,6 +53,7 @@
     --band: rgba(255, 255, 255, 0.045);
     --hover: rgba(255, 255, 255, 0.05);
     --good: #0ca30c;
+    --bad: #f16a63;
     --shadow: none;
     --m0: #2a2a27;
     --a1: #16283d; --a2: #1c3f65; --a3: #23578e; --a4: #2f72b8; --a5: #4a92da; --a6: #82b9ee;
@@ -78,6 +80,7 @@
   --band: rgba(255, 255, 255, 0.045);
   --hover: rgba(255, 255, 255, 0.05);
   --good: #0ca30c;
+  --bad: #f16a63;
   --shadow: none;
   --m0: #2a2a27;
   --a1: #16283d; --a2: #1c3f65; --a3: #23578e; --a4: #2f72b8; --a5: #4a92da; --a6: #82b9ee;
@@ -307,6 +310,11 @@ tbody tr.on { background: var(--s1-soft); }
 tbody tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 .runs td:first-child { font-family: var(--mono); font-weight: 600; }
+
+/* Kontroly: řádek popisuje běh, ne měsíc dat. Proti ostatním tabulkám přibývá jen
+   ztlumený text uvnitř buňky a barevný výsledek -- červená je vyhrazená pro stav. */
+td .dim { color: var(--ink-3); }
+td .fail { color: var(--bad); font-weight: 600; }
 
 .tag {
   font-family: var(--mono);
